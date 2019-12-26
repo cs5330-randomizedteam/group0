@@ -18,6 +18,9 @@
 #define PIC1_CTRL	0xa0    /* Slave PIC control register address. */
 #define PIC1_DATA	0xa1    /* Slave PIC data register address. */
 
+#define IRQ_CASCADE0    2
+#define IRQ_CASCADE1    9
+
 /* Number of x86 interrupts. */
 #define INTR_CNT 256
 
@@ -32,6 +35,9 @@ static intr_handler_func *intr_handlers[INTR_CNT];
 
 /* Names for each interrupt, for debugging purposes. */
 static const char *intr_names[INTR_CNT];
+
+/* Cached values for PIC mask. */
+static uint8_t pic_mask[2];
 
 /* Number of unexpected interrupts for each vector.  An
    unexpected interrupt is one that has no registered handler. */
@@ -256,6 +262,10 @@ pic_init (void)
   /* Unmask all interrupts. */
   outb (PIC0_DATA, 0x00);
   outb (PIC1_DATA, 0x00);
+
+  /* Set cached mask values. */
+  pic_mask[0] = 0;
+  pic_mask[1] = 0;
 }
 
 /* Sends an end-of-interrupt signal to the PIC for the given IRQ.
@@ -435,4 +445,49 @@ const char *
 intr_name (uint8_t vec)
 {
   return intr_names[vec];
+}
+
+/* Masks a given IRQ */
+void intr_irq_mask(int irq)
+{
+  if (irq < 8)
+    {
+      pic_mask[0] |= 1 << irq;
+      outb (PIC0_DATA, pic_mask[0]);
+    }
+  else
+    {
+      pic_mask[1] |= 1 << (irq - 8);
+      outb (PIC1_DATA, pic_mask[1]);
+    }
+}
+
+/* Unmasks a given IRQ */
+void intr_irq_unmask(int irq)
+{
+  if (irq >= 8)
+    {
+      /* enable cascade if not enabled for pic2 */
+      if (pic_mask[1] & (1 << (IRQ_CASCADE1 - 8)))
+        pic_mask[1] &= ~(1 << (IRQ_CASCADE1 - 8));
+
+       pic_mask[1] &= ~(1 << (irq - 8));
+       outb(PIC1_DATA, pic_mask[1]);
+
+       /* enable cascade if not enabled for pic1 */
+       if (pic_mask[0] & (1 << IRQ_CASCADE0))
+         irq = IRQ_CASCADE0;
+     }
+
+     if (irq < 8)
+       {
+         pic_mask[0] &= ~(1 << irq);
+         outb (PIC0_DATA, pic_mask[0]);
+       }
+}
+
+/* Returns whether an interrupt handler is registered. */
+bool intr_is_registered(uint8_t vec)
+{
+  return intr_handlers[vec] != NULL;
 }

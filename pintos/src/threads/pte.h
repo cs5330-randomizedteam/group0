@@ -28,6 +28,13 @@
 #define PDBITS  10                         /* Number of page dir bits. */
 #define PDMASK  BITMASK(PDSHIFT, PDBITS)   /* Page directory bits (22:31). */
 
+/* Memory dedicated to PCE - make sure this is 4MB aligned. */
+/* memory dedicated to PCI - make sure this is 4MB aligned */
+#define PCI_ADDR_ZONE_BEGIN	0xe0000000
+#define PCI_ADDR_ZONE_END	0xe0800000
+#define PCI_ADDR_ZONE_PDES	2
+#define PCI_ADDR_ZONE_PAGES	(PCI_ADDR_ZONE_END-PCI_ADDR_ZONE_BEGIN)/PGSIZE
+
 /* Obtains page table index from a virtual address. */
 static inline unsigned pt_no (const void *va) {
   return ((uintptr_t) va & PTMASK) >> PTSHIFT;
@@ -64,8 +71,11 @@ static inline uintptr_t pd_no (const void *va) {
 #define PTE_P 0x1               /* 1=present, 0=not present. */
 #define PTE_W 0x2               /* 1=read/write, 0=read-only. */
 #define PTE_U 0x4               /* 1=user/kernel, 0=kernel only. */
+#define PTE_WT 0x8              /* 1=write-through, 0=write-back. */
+#define PTE_CD 0x10             /* 1=cache disabled, 0=cache enabled. */
 #define PTE_A 0x20              /* 1=accessed, 0=not acccessed. */
 #define PTE_D 0x40              /* 1=dirty, 0=not dirty (PTEs only). */
+#define PTE_G (1 << 8)          /* 1=global page, do not flush */
 
 /* Returns a PDE that points to page table PT. */
 static inline uint32_t pde_create (uint32_t *pt) {
