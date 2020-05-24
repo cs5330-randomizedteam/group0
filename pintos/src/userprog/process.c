@@ -77,12 +77,12 @@ start_process (void *args_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
-  // if_.esp -= 12;
+  if_.esp -= 12;
   // *((char***)if_.esp) = args + 1;
-  // if_.esp -= 4;
-  // *((int*)if_.esp) = argc;
-  // if_.esp -= 4;
-  if_.esp -= 20;
+  if_.esp -= 4;
+  *((int*)if_.esp) = argc;
+  if_.esp -= 4;
+  // if_.esp -= 20;
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
