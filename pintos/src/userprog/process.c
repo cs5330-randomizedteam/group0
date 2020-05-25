@@ -28,30 +28,34 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const int argc, const char **argv)
+process_execute (const char *argv)
 {
-  char **args_copy = palloc_get_page(0);
   tid_t tid;
-  ASSERT(argc > 0);
-  const char* file_name = argv[0];
   sema_init (&temporary, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  int i;
-  for (i = 0; i < argc; i++) {
-    args_copy[i] = palloc_get_page (0);
-    if (args_copy == NULL)
-      return TID_ERROR;
-    strlcpy (args_copy[i], argv[i], PGSIZE);
+  char *exec_name = palloc_get_page(0);
+  strlcpy(exec_name, argv, strlen(argv) + 1);
+
+  int i = 0;
+  char *token, *save_ptr;
+  char **args = palloc_get_page(0);
+  for (token = strtok_r ((char*)exec_name, " ", &save_ptr); token != NULL;
+      token = strtok_r (NULL, " ", &save_ptr), ++i) {
+      args[i] = token;
   }
-  args_copy[i] = NULL;
+  args[i] = exec_name;
+  args[i + 1] = NULL;
+  char *file_name = palloc_get_page(0);
+  strlcpy(file_name, args[0], strlen(args[0]) + 1);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, args_copy);
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, args);
+
   if (tid == TID_ERROR) {
-    for (i = 0; i < argc; i++) {
-      palloc_free_page (args_copy[i]);
-    }
+    palloc_free_page (exec_name);
+    palloc_free_page (file_name);
+    palloc_free_page (args);
   }
   return tid;
 }
@@ -61,7 +65,11 @@ process_execute (const int argc, const char **argv)
 static void
 start_process (void *args_)
 {
+  int argc = 0, i;
   char **args = args_;
+  for (; args[argc] != NULL; argc++) {}
+  argc--;
+
   char *file_name = args[0];
   struct intr_frame if_;
   bool success;
@@ -73,9 +81,6 @@ start_process (void *args_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
   uint32_t *cur_pd = thread_current()->pagedir;
-
-  int i, argc = 0;
-  for (i = 0; args[i] != NULL; ++i) argc++;
 
   char* va[argc + 1];
   size_t total_len = (size_t)if_.esp, stack_align = 0;
@@ -113,9 +118,7 @@ start_process (void *args_)
   // return address
   if_.esp -= 4;
 
-  /* If load failed, quit. */
-  for (i = 0; args[i] != NULL; ++i) 
-    palloc_free_page (args[i]);
+  palloc_free_page(args[argc]);
   palloc_free_page(args);
 
   if (!success)
