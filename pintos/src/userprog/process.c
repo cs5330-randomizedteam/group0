@@ -120,7 +120,6 @@ start_process (void *args_)
 
   if (!success)
     thread_exit ();
-
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its

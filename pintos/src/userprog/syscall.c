@@ -32,4 +32,19 @@ syscall_handler (struct intr_frame *f UNUSED)
       printf ("%s: exit(%d)\n", &thread_current ()->name, args[1]);
       thread_exit ();
     }
+  else if (args[0] == SYS_PRACTICE) 
+    {
+      f->eax = args[1] + 1; 
+      asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (f) : "memory");
+    }
+  else if (args[0] == SYS_WRITE)
+    {
+      int fd = args[1];
+      const char *buf = (const char*)args[2];
+      size_t size = args[3];
+
+      // STDOUT
+      if (fd == 1) putbuf(buf, size);
+      asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (f) : "memory");
+    }
 }

@@ -284,7 +284,7 @@ run_task (char **argv)
   const char *task = argv[1];
   int i, argc = 0;
   for (i = 1; argv[i] != NULL; ++i) argc++;
-
+  
   printf ("Executing '%s':\n", task);
 #ifdef USERPROG
   process_wait (process_execute (argc, argv + 1));
