@@ -90,8 +90,8 @@ start_process (void *args_)
   }
   va[argc] = NULL;
 
-  total_len -= (argc + 4) * sizeof(void*);
-  stack_align = total_len % 16;
+  total_len -= (argc + 3) * sizeof(void*);
+  stack_align = total_len % 16 ;
   if_.esp -= (stack_align);
 
   for (i = argc; i >= 0; --i) {
