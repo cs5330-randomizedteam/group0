@@ -34,7 +34,6 @@ process_execute (const int argc, const char **argv)
   tid_t tid;
   ASSERT(argc > 0);
   const char* file_name = argv[0];
-
   sema_init (&temporary, 0);
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -67,25 +66,58 @@ start_process (void *args_)
   struct intr_frame if_;
   bool success;
 
-  int i, argc = 0;
-  for (i = 0; args[i] != NULL; ++i) ++argc;
-
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  uint32_t *cur_pd = thread_current()->pagedir;
 
-  if_.esp -= 12;
-  // *((char***)if_.esp) = args + 1;
+  int i, argc = 0;
+  for (i = 0; args[i] != NULL; ++i) argc++;
+
+  char* va[argc + 1];
+  size_t total_len = (size_t)if_.esp, stack_align = 0;
+  for (i = argc - 1; i >= 0; --i) {
+    size_t cur_len = strlen(args[i]) + 1;
+    total_len -= cur_len;
+    if_.esp -= cur_len;
+    va[i] = if_.esp;
+
+    char* cur_word = pagedir_get_page(cur_pd, if_.esp);
+    strlcpy(cur_word, args[i], cur_len);
+  }
+  va[argc] = NULL;
+
+  total_len -= (argc + 4) * sizeof(void*);
+  stack_align = total_len % 16;
+  if_.esp -= (stack_align);
+
+  for (i = argc; i >= 0; --i) {
+    if_.esp -= 4;
+    char **null_word = pagedir_get_page(cur_pd, if_.esp);
+    *null_word = va[i];
+  }
+
+  // argv
   if_.esp -= 4;
-  *((int*)if_.esp) = argc;
+  char ***argv_addr = pagedir_get_page(cur_pd, if_.esp);
+  *argv_addr = (char**)(if_.esp + 4);
+
+  //argc
   if_.esp -= 4;
-  // if_.esp -= 20;
+  int *argc_addr = pagedir_get_page(cur_pd, if_.esp);
+  *argc_addr = argc;
+
+  // return address
+  if_.esp -= 4;
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+  for (i = 0; args[i] != NULL; ++i) 
+    palloc_free_page (args[i]);
+  palloc_free_page(args);
+
   if (!success)
     thread_exit ();
 
