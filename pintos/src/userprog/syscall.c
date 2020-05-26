@@ -12,6 +12,11 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+static bool is_valid_uaddr(void *uaddr) 
+{
+  
+}
+
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
@@ -35,7 +40,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   else if (args[0] == SYS_PRACTICE) 
     {
       f->eax = args[1] + 1; 
-      asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (f) : "memory");
     }
   else if (args[0] == SYS_WRITE)
     {
@@ -45,6 +49,5 @@ syscall_handler (struct intr_frame *f UNUSED)
 
       // STDOUT
       if (fd == 1) putbuf(buf, size);
-      asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (f) : "memory");
     }
 }

@@ -90,8 +90,7 @@ start_process (void *args_)
     if_.esp -= cur_len;
     va[i] = if_.esp;
 
-    char* cur_word = pagedir_get_page(cur_pd, if_.esp);
-    strlcpy(cur_word, args[i], cur_len);
+    strlcpy(if_.esp, args[i], cur_len);
   }
   va[argc] = NULL;
 
@@ -101,19 +100,16 @@ start_process (void *args_)
 
   for (i = argc; i >= 0; --i) {
     if_.esp -= 4;
-    char **null_word = pagedir_get_page(cur_pd, if_.esp);
-    *null_word = va[i];
+    *((char**)if_.esp) = va[i];
   }
 
   // argv
   if_.esp -= 4;
-  char ***argv_addr = pagedir_get_page(cur_pd, if_.esp);
-  *argv_addr = (char**)(if_.esp + 4);
+  *((char***)if_.esp) = (char**)(if_.esp + 4);
 
   //argc
   if_.esp -= 4;
-  int *argc_addr = pagedir_get_page(cur_pd, if_.esp);
-  *argc_addr = argc;
+  *((int*)if_.esp) = argc;
 
   // return address
   if_.esp -= 4;
