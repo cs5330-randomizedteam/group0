@@ -1,4 +1,5 @@
 #include "userprog/syscall.h"
+#include <debug.h>
 #include <stdio.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
@@ -7,6 +8,7 @@
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 #include "devices/shutdown.h"
+#include "devices/input.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 
@@ -88,11 +90,34 @@ syscall_handler (struct intr_frame *f UNUSED)
         { 
           check_valid_uaddr(f, args + 1, 3 * sizeof(uint32_t));
           int fd = args[1];
-          const char *buf = (const char*)args[2];
-          size_t size = args[3];
+          char* buf = (char*) args[2];
+          uint32_t size = args[3];
+          if (fd < 0 || fd >= MAX_FILE_DESCRIPTORS) {
+            f->eax = 0;
+            break;
+          }
 
-          // STDOUT
-          if (fd == 1) putbuf(buf, size);
+          // write to stdout
+          if (fd == 1) {
+            check_valid_uaddr(f, buf, size);
+            putbuf(buf, size);
+            f->eax = size;
+            break;
+          }
+
+          struct file* cur_file = thread_current()->fdtable[fd];
+          if (cur_file == NULL) {
+            f->eax = 0;
+            break;
+          }
+
+          uint32_t remain_size = file_length(cur_file) - file_tell(cur_file);
+          uint32_t max_write_size = remain_size < size ? remain_size : size;
+          check_valid_uaddr(f, buf, max_write_size);
+
+          uint32_t write_size = file_write(cur_file, buf, size);
+          ASSERT(write_size == max_write_size);
+          f->eax = write_size;
           break;
         }
       case SYS_HALT:
@@ -189,6 +214,81 @@ syscall_handler (struct intr_frame *f UNUSED)
           }
 
           f->eax = file_length(cur_file);
+          break;
+        }
+
+      case SYS_TELL:
+        {
+          check_valid_uaddr(f, args + 1, sizeof(uint32_t));
+          int fd = args[1];
+          if (fd < 0 || fd >= MAX_FILE_DESCRIPTORS) {
+            f->eax = 0;
+            break;
+          }
+
+          struct file* cur_file = thread_current()->fdtable[fd];
+          if (cur_file == NULL) {
+            f->eax = 0;
+            break;
+          }
+
+          f->eax = file_tell(cur_file);
+          break;
+        }
+      case SYS_SEEK:
+        {
+          check_valid_uaddr(f, args + 1, 2 * sizeof(uint32_t));
+          int fd = args[1];
+          if (fd < 0 || fd >= MAX_FILE_DESCRIPTORS) {
+            break;
+          }
+          uint32_t pos = args[2];
+
+          struct file* cur_file = thread_current()->fdtable[fd];
+          if (cur_file == NULL) {
+            break;
+          }
+
+          file_seek(cur_file, pos);
+          break;          
+        }
+
+      case SYS_READ:
+        {
+          check_valid_uaddr(f, args + 1, 3 * sizeof(uint32_t));
+          int fd = args[1];
+          char* buf = (char*) args[2];
+          uint32_t size = args[3];
+          if (fd < 0 || fd >= MAX_FILE_DESCRIPTORS) {
+            f->eax = -1;
+            break;
+          }
+
+          // read from stdin
+          if (fd == 0) {
+            check_valid_uaddr(f, buf, size);
+            while (size > 0) {
+              *buf = input_getc();
+              buf++;
+              size--;
+            }
+            f->eax = size;
+            break;
+          }
+
+          struct file* cur_file = thread_current()->fdtable[fd];
+          if (cur_file == NULL) {
+            f->eax = -1;
+            break;
+          }
+
+          uint32_t remain_size = file_length(cur_file) - file_tell(cur_file);
+          uint32_t min_buf_size = remain_size < size ? remain_size : size;
+          check_valid_uaddr(f, buf, min_buf_size);
+
+          uint32_t read_size = file_read(cur_file, buf, size);
+          ASSERT(read_size == min_buf_size);
+          f->eax = read_size;
           break;
         }
     }
