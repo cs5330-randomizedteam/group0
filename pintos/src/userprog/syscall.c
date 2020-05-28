@@ -31,6 +31,7 @@ static bool page_fault_exit(struct intr_frame *f) {
   // set return code to -1 and exit.
   f->eax = -1;
   printf ("%s: exit(%d)\n", &thread_current ()->name, -1);
+  thread_current ()->exit_status = -1;
   thread_exit ();
 }
 
