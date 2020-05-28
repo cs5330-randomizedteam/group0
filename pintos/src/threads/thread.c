@@ -282,7 +282,7 @@ mark_children_as_orphan()
   struct thread* t = thread_current();
   struct list_elem *e;
 
-  for (e = list_begin (&t->child_processes); e != list_end (&child_processes);
+  for (e = list_begin (&(t->child_processes)); e != list_end (&(t->child_processes));
        e = list_next (e))
     {
       struct thread *child = list_entry (e, struct thread, child_elem);
@@ -306,7 +306,7 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   mark_children_as_orphan(); // as parent
-  sema_up(thread_current()->child_sem); // as child
+  sema_up(&(thread_current()->child_sem)); // as child
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
@@ -485,7 +485,7 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init (&(t->load_sem), 0);
   sema_init (&(t->child_sem), 0);
   list_init(&(t->child_processes));
-  list_push_back(&(thread_current()->child_processes), t->child_elem);
+  list_push_back(&(thread_current()->child_processes), &(t->child_elem));
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

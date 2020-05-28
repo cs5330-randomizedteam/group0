@@ -140,7 +140,7 @@ syscall_handler (struct intr_frame *f UNUSED)
           struct thread* t = get_thread(tid);
           ASSERT(t != NULL);
 
-          sema_down(&(t->load_sema));
+          sema_down(&(t->load_sem));
           if (t->is_loaded) {
             f->eax = tid;
           } else {

@@ -82,7 +82,7 @@ start_process (void *args_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   thread_current()->is_loaded = success;
-  sem_up(thread_current()->load_sem);
+  sema_up(&(thread_current()->load_sem));
 
   if (!success) {
     palloc_free_page(args[argc]);
@@ -153,7 +153,7 @@ process_wait (tid_t child_tid)
   struct thread *child = NULL;
   struct list_elem *e;
 
-  for (e = list_begin (&(t->child_processes)); e != list_end (&child_processes);
+  for (e = list_begin (&(t->child_processes)); e != list_end (&(t->child_processes));
        e = list_next (e))
     {
       struct thread *c = list_entry (e, struct thread, child_elem);
@@ -163,7 +163,7 @@ process_wait (tid_t child_tid)
       }
     } 
   if (child == NULL) return -1;
-  sema_down(child->child_sem);
+  sema_down(&(child->child_sem));
   list_remove(&(child->child_elem));
   ASSERT(child->status == THREAD_DYING);
   int exit_status = child->exit_status;
