@@ -485,7 +485,7 @@ init_thread (struct thread *t, const char *name, int priority)
   sema_init (&(t->load_sem), 0);
   sema_init (&(t->child_sem), 0);
   list_init(&(t->child_processes));
-  list_push_back(&(thread_current()->child_processes), &(t->child_elem));
+  list_push_back(&(running_thread()->child_processes), &(t->child_elem));
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

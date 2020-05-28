@@ -90,8 +90,6 @@ start_process (void *args_)
     thread_exit ();
   }
 
-  uint32_t *cur_pd = thread_current()->pagedir;
-
   char* va[argc + 1];
   size_t total_len = (size_t)if_.esp, stack_align = 0;
   for (i = argc - 1; i >= 0; --i) {
