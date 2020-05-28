@@ -5,6 +5,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 #include "devices/shutdown.h"
@@ -76,8 +77,8 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
       case SYS_EXIT:
         check_valid_uaddr(f, args + 1, sizeof(uint32_t));
-        f->eax = args[1];
         printf ("%s: exit(%d)\n", &thread_current ()->name, args[1]);
+        thread_current ()-> exit_status = args[1];
         thread_exit ();
         break;
 
@@ -130,12 +131,31 @@ syscall_handler (struct intr_frame *f UNUSED)
           char* start_addr = (char*)args[1];
           validate_char_str(start_addr, f);
 
-          // process_wait (process_execute (start_addr));
+          tid_t tid = process_execute(start_addr);
+          if (tid == TID_ERROR) {
+            f->eax = tid;
+            break;
+          }
+
+          struct thread* t = get_thread(tid);
+          ASSERT(t != NULL);
+
+          sema_down(&(t->load_sema));
+          if (t->is_loaded) {
+            f->eax = tid;
+          } else {
+            f->eax = TID_ERROR;
+          }
           break;
         }
 
       case SYS_WAIT:
-        break;
+        {
+          check_valid_uaddr(f, args + 1, sizeof(uint32_t));
+          tid_t tid = args[1];
+          f->eax = process_wait(tid); 
+          break;
+        } 
 
       case SYS_CREATE:
         {

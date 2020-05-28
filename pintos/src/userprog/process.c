@@ -80,6 +80,16 @@ start_process (void *args_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+
+  thread_current()->is_loaded = success;
+  sem_up(thread_current()->load_sem);
+
+  if (!success) {
+    palloc_free_page(args[argc]);
+    palloc_free_page(args);
+    thread_exit ();
+  }
+
   uint32_t *cur_pd = thread_current()->pagedir;
 
   char* va[argc + 1];
@@ -117,8 +127,6 @@ start_process (void *args_)
   palloc_free_page(args[argc]);
   palloc_free_page(args);
 
-  if (!success)
-    thread_exit ();
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -139,10 +147,29 @@ start_process (void *args_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED)
+process_wait (tid_t child_tid)
 {
-  sema_down (&temporary);
-  return 0;
+  struct thread *t = thread_current();
+  struct thread *child = NULL;
+  struct list_elem *e;
+
+  for (e = list_begin (&(t->child_processes)); e != list_end (&child_processes);
+       e = list_next (e))
+    {
+      struct thread *c = list_entry (e, struct thread, child_elem);
+      if (c->tid == child_tid) {
+        child = c;
+        break;
+      }
+    } 
+  if (child == NULL) return -1;
+  sema_down(child->child_sem);
+  list_remove(&(child->child_elem));
+  ASSERT(child->status == THREAD_DYING);
+  int exit_status = child->exit_status;
+  palloc_free_page (child);
+
+  return exit_status;
 }
 
 /* Free the current process's resources. */

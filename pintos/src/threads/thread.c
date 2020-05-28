@@ -275,6 +275,21 @@ thread_tid (void)
   return thread_current ()->tid;
 }
 
+/* Marks all the child threads of the current threads as orphans */
+void 
+mark_children_as_orphan() 
+{
+  struct thread* t = thread_current();
+  struct list_elem *e;
+
+  for (e = list_begin (&t->child_processes); e != list_end (&child_processes);
+       e = list_next (e))
+    {
+      struct thread *child = list_entry (e, struct thread, child_elem);
+      child->is_orphan = true;
+    }
+}
+
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
 void
@@ -290,6 +305,8 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
+  mark_children_as_orphan(); // as parent
+  sema_up(thread_current()->child_sem); // as child
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
@@ -463,6 +480,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->is_orphan = false;
+  t->is_loaded = false;
+  sema_init (&(t->load_sem), 0);
+  sema_init (&(t->child_sem), 0);
+  list_init(&(t->child_processes));
+  list_push_back(&(thread_current()->child_processes), t->child_elem);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -535,7 +558,7 @@ thread_schedule_tail (struct thread *prev)
      pull out the rug under itself.  (We don't free
      initial_thread because its memory was not obtained via
      palloc().) */
-  if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread)
+  if (prev != NULL && prev->is_orphan && prev->status == THREAD_DYING && prev != initial_thread)
     {
       ASSERT (prev != cur);
       palloc_free_page (prev);
@@ -578,6 +601,21 @@ allocate_tid (void)
 
   return tid;
 }
+
+struct thread* get_thread(tid_t tid) 
+{
+  struct list_elem *e;
+
+  for (e = list_begin (&all_list); e != list_end (&all_list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, allelem);
+      if (t->tid == tid) return t;
+    }
+  return NULL;
+}
+
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
