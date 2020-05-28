@@ -29,6 +29,9 @@ typedef int tid_t;
 /* Process File Descriptors */
 #define MAX_FILE_DESCRIPTORS 128
 
+/* Maximum number of threads allowed by the system */
+#define MAX_THREAD_LIMIT 40
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The

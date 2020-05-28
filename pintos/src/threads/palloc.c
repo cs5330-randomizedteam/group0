@@ -40,6 +40,10 @@ static void init_pool (struct pool *, void *base, size_t page_cnt,
                        const char *name);
 static bool page_from_pool (const struct pool *, void *page);
 
+int get_usage(void) {
+  return bitmap_count (kernel_pool.used_map, 0, bitmap_size(kernel_pool.used_map), true);
+}
+
 /* Initializes the page allocator.  At most USER_PAGE_LIMIT
    pages are put into the user pool. */
 void

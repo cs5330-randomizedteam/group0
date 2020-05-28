@@ -46,15 +46,17 @@ process_execute (const char *argv)
   }
   args[i] = exec_name;
   args[i + 1] = NULL;
+
   char *file_name = palloc_get_page(0);
   strlcpy(file_name, args[0], strlen(args[0]) + 1);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, args);
 
+  palloc_free_page(file_name);
+
   if (tid == TID_ERROR) {
     palloc_free_page (exec_name);
-    palloc_free_page (file_name);
     palloc_free_page (args);
   }
   return tid;
@@ -164,7 +166,7 @@ process_wait (tid_t child_tid)
   sema_down(&(child->child_sem));
   list_remove(&(child->child_elem));
   ASSERT(child->status == THREAD_DYING);
-  int exit_status = child->exit_status;
+  int exit_status = child->exit_status; 
   palloc_free_page (child);
 
   return exit_status;

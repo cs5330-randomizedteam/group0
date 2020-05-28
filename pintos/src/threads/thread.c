@@ -166,6 +166,8 @@ tid_t
 thread_create (const char *name, int priority,
                thread_func *function, void *aux)
 {
+  if (list_size(&all_list) >= MAX_THREAD_LIMIT) return TID_ERROR;
+  
   struct thread *t;
   struct kernel_thread_frame *kf;
   struct switch_entry_frame *ef;
@@ -276,8 +278,8 @@ thread_tid (void)
 }
 
 /* Marks all the child threads of the current threads as orphans */
-void 
-mark_children_as_orphan() 
+static void 
+mark_children_as_orphan(void) 
 {
   struct thread* t = thread_current();
   struct list_elem *e;
@@ -300,6 +302,7 @@ thread_exit (void)
 #ifdef USERPROG
   process_exit ();
 #endif
+
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
@@ -558,10 +561,16 @@ thread_schedule_tail (struct thread *prev)
      pull out the rug under itself.  (We don't free
      initial_thread because its memory was not obtained via
      palloc().) */
-  if (prev != NULL && prev->is_orphan && prev->status == THREAD_DYING && prev != initial_thread)
+  if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread)
     {
       ASSERT (prev != cur);
-      palloc_free_page (prev);
+      int i;
+      for (i = 0; i < MAX_FILE_DESCRIPTORS; ++i) {
+        if (prev->fdtable[i] != NULL) {
+          file_close(prev->fdtable[i]);
+        }
+      } 
+      if (prev->is_orphan) palloc_free_page (prev);
     }
 }
 
