@@ -611,7 +611,8 @@ allocate_tid (void)
   return tid;
 }
 
-struct thread* get_thread(tid_t tid) 
+struct thread* 
+get_thread(tid_t tid) 
 {
   struct list_elem *e;
 
@@ -623,6 +624,22 @@ struct thread* get_thread(tid_t tid)
     }
   return NULL;
 }
+
+struct thread* 
+get_thread_with_name(char* name) 
+{
+  struct list_elem *e;
+
+  for (e = list_begin (&all_list); e != list_end (&all_list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, allelem);
+      if (strcmp(name, t->name) == 0) return t;
+    }
+  return NULL;
+}
+
+
 
 
 

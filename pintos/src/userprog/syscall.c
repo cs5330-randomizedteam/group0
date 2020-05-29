@@ -118,7 +118,6 @@ syscall_handler (struct intr_frame *f UNUSED)
           check_valid_uaddr(f, buf, max_write_size);
 
           uint32_t write_size = file_write(cur_file, buf, size);
-          ASSERT(write_size == max_write_size);
           f->eax = write_size;
           break;
         }
@@ -189,6 +188,9 @@ syscall_handler (struct intr_frame *f UNUSED)
             f->eax = -1;
             break;
           }
+
+          // executable running
+          if (get_thread_with_name(filename) != NULL) file_deny_write(opened_file);
 
           struct file** cur_fdtable = thread_current()->fdtable; 
           int i;
