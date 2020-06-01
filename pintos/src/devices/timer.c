@@ -4,6 +4,7 @@
 #include <round.h>
 #include <stdio.h>
 #include "devices/pit.h"
+#include "threads/malloc.h"
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
@@ -30,6 +31,8 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
+static struct list sleep_list;
+
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -37,6 +40,7 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  list_init(&sleep_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -89,11 +93,17 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks)
 {
-  int64_t start = timer_ticks ();
-
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks)
-    thread_yield ();
+  struct sleeping_thread *sleep_thread;
+  sleep_thread = malloc(sizeof(struct sleeping_thread));
+  sleep_thread->remain_ticks = ticks;
+  sleep_thread->t = thread_current();
+
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  list_push_back(&sleep_list, &(sleep_thread->elem));
+  thread_block();
+  intr_set_level (old_level);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -171,6 +181,19 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
+  struct list_elem *e;
+
+  for (e = list_begin (&sleep_list); e != list_end (&sleep_list);
+     e = list_next (e))
+  {
+    struct sleeping_thread *st = list_entry (e, struct sleeping_thread, elem);
+    st->remain_ticks--;
+    if (st->remain_ticks <= 0) {
+      thread_unblock(st->t);
+      list_remove(&(st->elem));
+    }
+  }
+
   thread_tick ();
 }
 
