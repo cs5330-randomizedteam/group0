@@ -18,6 +18,7 @@
 #error TIMER_FREQ <= 1000 recommended
 #endif
 
+
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
@@ -191,12 +192,12 @@ timer_interrupt (struct intr_frame *args UNUSED)
   {
     struct sleeping_thread *st = list_entry (e, struct sleeping_thread, elem);
     st->remain_ticks--;
-    if (st->remain_ticks <= 0) {
+    if (st->remain_ticks <= 0) {      
       thread_unblock(st->t);
       list_remove(&(st->elem));
+      intr_yield_on_return();
     }
   }
-
   thread_tick ();
 }
 
