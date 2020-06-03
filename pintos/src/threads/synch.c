@@ -144,7 +144,7 @@ sema_self_test (void)
   int i;
 
   printf ("Testing semaphores...");
-  sema_init ( &sema[0], 0);
+  sema_init (&sema[0], 0);
   sema_init (&sema[1], 0);
   thread_create ("sema-test", PRI_DEFAULT, sema_test_helper, &sema);
   for (i = 0; i < 10; i++)
@@ -214,7 +214,7 @@ lock_acquire (struct lock *lock)
 
   enum intr_level old_level = intr_disable ();
   while (cur_lock != NULL && cur_lock->holder != NULL) {
-    if (cur_lock->holder->priority > cur_priority) break;
+    if (cur_lock->holder->priority >= cur_priority) break;
     cur_lock->holder->priority = cur_priority;
     cur_lock = cur_lock->holder->wait_lock;
   }
@@ -261,6 +261,8 @@ lock_release (struct lock *lock)
   lock->holder->priority = lock->old_priority;
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+
+  thread_yield();
 }
 
 /* Returns true if the current thread holds LOCK, false

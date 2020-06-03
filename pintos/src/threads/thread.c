@@ -63,6 +63,7 @@ static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
+static struct thread *find_max_priority_thread(void);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
 static bool is_thread (struct thread *) UNUSED;
@@ -302,17 +303,20 @@ thread_exit (void)
    may be scheduled again immediately at the scheduler's whim. */
 void
 thread_yield (void)
-{
+{ 
   struct thread *cur = thread_current ();
   enum intr_level old_level;
 
   ASSERT (!intr_context ());
 
+  struct list_elem *e;
+
   old_level = intr_disable ();
   if (cur != idle_thread)
-    list_push_back (&ready_list, &cur->elem);
+  list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
+
   intr_set_level (old_level);
 }
 
@@ -338,6 +342,7 @@ void
 thread_set_priority (int new_priority)
 {
   thread_current ()->priority = new_priority;
+  thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -426,7 +431,7 @@ kernel_thread (thread_func *function, void *aux)
   function (aux);       /* Execute the thread function. */
   thread_exit ();       /* If function() returns, kill the thread. */
 }
-
+
 /* Returns the running thread. */
 struct thread *
 running_thread (void)
@@ -485,14 +490,8 @@ alloc_frame (struct thread *t, size_t size)
   return t->stack;
 }
 
-/* Chooses and returns the next thread to be scheduled.  Should
-   return a thread from the run queue, unless the run queue is
-   empty.  (If the running thread can continue running, then it
-   will be in the run queue.)  If the run queue is empty, return
-   idle_thread. */
-static struct thread *
-next_thread_to_run (void)
-{
+static struct thread * 
+find_max_priority_thread(void) {
   if (list_empty (&ready_list))
     return idle_thread;
   else {
@@ -505,9 +504,23 @@ next_thread_to_run (void)
       struct thread *t = list_entry (e, struct thread, elem);
       if (t->priority > max_pri_thread->priority) max_pri_thread = t;
     }
-    list_remove(&(max_pri_thread->elem));
     return max_pri_thread;
   }
+}
+
+
+/* Chooses and returns the next thread to be scheduled.  Should
+   return a thread from the run queue, unless the run queue is
+   empty.  (If the running thread can continue running, then it
+   will be in the run queue.)  If the run queue is empty, return
+   idle_thread. */
+static struct thread *
+next_thread_to_run (void)
+{
+  struct thread *t = find_max_priority_thread();
+  if (t == idle_thread) return t;
+  list_remove(&(t->elem));
+  return t;
 }
 
 /* Completes a thread switch by activating the new thread's page
