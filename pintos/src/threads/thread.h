@@ -97,6 +97,11 @@ struct thread
 
     struct lock *wait_lock;             /* The lock that thread is waiting for, NULL otherwise. */
 
+    struct list donate_list;           /* List of threads that have donated their priority. */
+    struct list_elem donate_elem;      /* List donate element. */
+    int original_priority;             /* Original priority without donation. */
+
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
