@@ -95,18 +95,17 @@ void
 timer_sleep (int64_t ticks)
 {
   if (ticks <= 0) return;
+  struct sleeping_thread sleep_thread;
 
   ASSERT (intr_get_level () == INTR_ON);
-  struct sleeping_thread *sleep_thread;
-  sleep_thread = malloc(sizeof(struct sleeping_thread));
-  sleep_thread->remain_ticks = ticks;
-  sleep_thread->t = thread_current();
+
+  sleep_thread.remain_ticks = ticks;
+  sleep_thread.t = thread_current();
 
   enum intr_level old_level;
   old_level = intr_disable ();
-  list_push_back(&sleep_list, &(sleep_thread->elem));
+  list_push_back(&sleep_list, &(sleep_thread.elem));
   thread_block();
-  free(sleep_thread);
   intr_set_level (old_level);
 }
 
