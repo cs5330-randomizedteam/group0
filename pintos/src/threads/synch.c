@@ -105,7 +105,7 @@ sema_try_down (struct semaphore *sema)
    and wakes up one thread of those waiting for SEMA, if any.
 
    This function may be called from an interrupt handler. */
-struct thread *
+void
 sema_up (struct semaphore *sema)
 {
   enum intr_level old_level;
@@ -131,7 +131,7 @@ sema_up (struct semaphore *sema)
 
   sema->value++;
   intr_set_level (old_level);
-  return max_pri_thread;
+  thread_yield();
 }
 
 static void sema_test_helper (void *sema_);
@@ -266,11 +266,26 @@ lock_release (struct lock *lock)
 
   lock->holder = NULL;
 
-  struct thread* wake_thread = sema_up (&lock->semaphore);
-  
-  if (wake_thread != NULL && wake_thread->donate_elem.prev != NULL && wake_thread->donate_elem.next != NULL) {
-    list_remove(&(wake_thread->donate_elem));
+  enum intr_level old_level;
+
+  old_level = intr_disable ();
+  struct thread *max_pri_thread = NULL;
+
+  if (!list_empty (&(lock->semaphore.waiters))) {
+    struct list_elem *e;
+    max_pri_thread = list_entry (list_front(&(lock->semaphore.waiters)), struct thread, elem);
+
+    for (e = list_begin (&(lock->semaphore.waiters)); e != list_end ((&lock->semaphore.waiters));
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, elem);
+      if (t->priority > max_pri_thread->priority) max_pri_thread = t;
+    }
+    list_remove(&(max_pri_thread->elem));
+    thread_unblock(max_pri_thread);
   }
+
+  lock->semaphore.value++;
 
   struct list_elem *e;
   struct list *donate_list = &(thread_current()->donate_list);
@@ -281,11 +296,13 @@ lock_release (struct lock *lock)
      e = list_next (e))
   {
     struct thread *t = list_entry (e, struct thread, donate_elem);
-
-    if (t->priority > max_priority) max_priority = t->priority;
+    if (t->wait_lock == lock) list_remove(&(t->donate_elem));
+    else if (t->priority > max_priority) max_priority = t->priority;
   }
 
   thread_current()->priority = max_priority;
+  intr_set_level (old_level);
+
   thread_yield();
 }
 
