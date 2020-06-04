@@ -210,11 +210,11 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  enum intr_level old_level = intr_disable ();
+
   thread_current()->wait_lock = lock;
   int cur_priority = thread_current()->priority;
   struct lock *cur_lock = lock;
-
-  enum intr_level old_level = intr_disable ();
 
   if (cur_lock->holder != NULL && cur_priority > cur_lock->holder->original_priority)
     list_push_back(&(cur_lock->holder->donate_list), &(thread_current()->donate_elem));
@@ -284,13 +284,12 @@ lock_release (struct lock *lock)
     list_remove(&(max_pri_thread->elem));
     thread_unblock(max_pri_thread);
   }
-
   lock->semaphore.value++;
 
+  // find new priority from donate list. 
   struct list_elem *e;
   struct list *donate_list = &(thread_current()->donate_list);
   int max_priority = thread_current()->original_priority;
-
 
   for (e = list_begin (donate_list); e != list_end (donate_list);
      e = list_next (e))
