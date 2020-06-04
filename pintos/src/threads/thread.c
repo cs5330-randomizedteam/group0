@@ -37,6 +37,9 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+/* Load avg of the system */ 
+static fixed_point_t load_avg;
+
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame
   {
@@ -93,6 +96,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  load_avg = fix_int(0);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -311,7 +315,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread)
-  list_push_back (&ready_list, &cur->elem);
+    list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
 
@@ -339,11 +343,13 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority)
 {
-  struct thread* t = thread_current();
-  if ((t->priority > t->original_priority && new_priority > t->priority) || (t->priority <= t->original_priority)) {
-    t->priority = new_priority;
-  }
-  t->original_priority = new_priority;
+  if (!thread_mlfqs) {
+    struct thread* t = thread_current();
+    if ((t->priority > t->original_priority && new_priority > t->priority) || (t->priority <= t->original_priority)) {
+      t->priority = new_priority;
+    }
+    t->original_priority = new_priority;
+  } 
   thread_yield();
 }
 
@@ -356,34 +362,59 @@ thread_get_priority (void)
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED)
-{
-  /* Not yet implemented. */
+thread_set_nice (int nice)
+{ 
+  if (nice < NICE_MIN) nice = NICE_MIN;
+  if (nice > NICE_MAX) nice = NICE_MAX; 
+  thread_current()->nice = nice;
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return fix_round(fix_scale(load_avg, 100));
+}
+
+void 
+thread_update_load_avg(void) {
+  int num_ready_threads = list_size(&ready_list);
+  if (thread_current() != idle_thread) num_ready_threads++; // includes running thread.
+  load_avg = fix_add(fix_mul(fix_frac(59, 60), load_avg), fix_scale(fix_frac(1, 60), num_ready_threads)); 
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void)
 {
-  /* Not yet implemented. */
-  return 0;
+  return fix_round(fix_scale(thread_current()->recent_cpu, 100));
 }
+
+void 
+thread_inc_recent_cpu(void)
+{
+  if (thread_current() != idle_thread)
+      thread_current()->recent_cpu = fix_add(thread_current()->recent_cpu, fix_int(1));
+}
+
+static void thread_update_recent_cpu(struct thread* t, void *aux UNUSED) {
+  fixed_point_t double_loadavg = fix_scale(load_avg, 2);
+  t->recent_cpu = fix_add(fix_mul(fix_div(double_loadavg, fix_add(double_loadavg, fix_int(1))), t->recent_cpu), fix_int(t->nice));
+}
+
+
+void threads_update_recent_cpu(void)
+{
+  thread_foreach(thread_update_recent_cpu, NULL);
+}
+
 
 /* Idle thread.  Executes when no other thread is ready to run.
 
@@ -455,6 +486,21 @@ is_thread (struct thread *t)
   return t != NULL && t->magic == THREAD_MAGIC;
 }
 
+static void
+calc_priority(struct thread* t, void *aux UNUSED) 
+{
+  int priority = fix_trunc(fix_sub(fix_sub(fix_int(PRI_MAX), fix_div(t->recent_cpu, fix_int(4))), fix_int(t->nice * 2)));
+  if (priority < PRI_MIN) priority = PRI_MIN;
+  if (priority > PRI_MAX) priority = PRI_MAX;
+  t->priority = priority;
+}
+
+void 
+threads_update_priority(void) 
+{
+  thread_foreach(calc_priority, NULL);
+}
+
 /* Does basic initialization of T as a blocked thread named
    NAME. */
 static void
@@ -470,10 +516,16 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
-  t->priority = priority;
+  t->recent_cpu = fix_int(0);
   t->original_priority = priority;
   t->magic = THREAD_MAGIC;
   t->wait_lock = NULL;
+  t->nice = 0;
+  if (thread_mlfqs) {
+    calc_priority(t, NULL);
+  } else {
+    t->priority = priority;
+  }
   list_init(&(t->donate_list));
 
   old_level = intr_disable ();
