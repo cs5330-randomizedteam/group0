@@ -212,24 +212,24 @@ lock_acquire (struct lock *lock)
 
   enum intr_level old_level = intr_disable ();
 
-  thread_current()->wait_lock = lock;
-  int cur_priority = thread_current()->priority;
-  struct lock *cur_lock = lock;
+  if (!thread_mlfqs) {
+    thread_current()->wait_lock = lock;
+    int cur_priority = thread_current()->priority;
+    struct lock *cur_lock = lock;
 
-  if (cur_lock->holder != NULL && cur_priority > cur_lock->holder->original_priority)
-    list_push_back(&(cur_lock->holder->donate_list), &(thread_current()->donate_elem));
+    if (cur_lock->holder != NULL && cur_priority > cur_lock->holder->original_priority)
+      list_push_back(&(cur_lock->holder->donate_list), &(thread_current()->donate_elem));
 
-  while (cur_lock != NULL && cur_lock->holder != NULL) {
-    if (cur_lock->holder->priority >= cur_priority) break;
-    cur_lock->holder->priority = cur_priority;
-    cur_lock = cur_lock->holder->wait_lock;
+    while (cur_lock != NULL && cur_lock->holder != NULL) {
+      if (cur_lock->holder->priority >= cur_priority) break;
+      cur_lock->holder->priority = cur_priority;
+      cur_lock = cur_lock->holder->wait_lock;
+    }
   }
   intr_set_level (old_level);
 
   sema_down (&lock->semaphore);
-
   thread_current()->wait_lock = NULL;
-
   lock->holder = thread_current ();
 }
 
@@ -287,19 +287,21 @@ lock_release (struct lock *lock)
   lock->semaphore.value++;
 
   // find new priority from donate list. 
-  struct list_elem *e;
-  struct list *donate_list = &(thread_current()->donate_list);
-  int max_priority = thread_current()->original_priority;
+  if (!thread_mlfqs) {
+    struct list_elem *e;
+    struct list *donate_list = &(thread_current()->donate_list);
+    int max_priority = thread_current()->original_priority;
 
-  for (e = list_begin (donate_list); e != list_end (donate_list);
-     e = list_next (e))
-  {
-    struct thread *t = list_entry (e, struct thread, donate_elem);
-    if (t->wait_lock == lock) list_remove(&(t->donate_elem));
-    else if (t->priority > max_priority) max_priority = t->priority;
+    for (e = list_begin (donate_list); e != list_end (donate_list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, donate_elem);
+      if (t->wait_lock == lock) list_remove(&(t->donate_elem));
+      else if (t->priority > max_priority) max_priority = t->priority;
+    }
+
+    thread_current()->priority = max_priority;
   }
-
-  thread_current()->priority = max_priority;
   intr_set_level (old_level);
 
   thread_yield();

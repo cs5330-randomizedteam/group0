@@ -309,8 +309,6 @@ thread_yield (void)
 
   ASSERT (!intr_context ());
 
-  struct list_elem *e;
-
   old_level = intr_disable ();
   if (cur != idle_thread)
   list_push_back (&ready_list, &cur->elem);
