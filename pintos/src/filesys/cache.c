@@ -28,10 +28,15 @@ void cache_init(void) {
 	buffer_map = ~0;
 	for (int i = 0; i < MAX_CACHE_SIZE; i++)
 		sector_buffers[i] = malloc(BLOCK_SECTOR_SIZE);
+	printf("init finish!!\n");
 }
 
 
 void cache_read(struct block *fs_device, block_sector_t sector, void* buffer) {
+	block_read(fs_device, sector, buffer);
+	return;
+
+
 	struct list_elem *e;
 
 	for (e = list_begin (&cache_list); e != list_end (&cache_list);
@@ -70,6 +75,8 @@ void cache_read(struct block *fs_device, block_sector_t sector, void* buffer) {
 void cache_write(struct block *fs_device, block_sector_t sector, void* buffer) {
 	struct list_elem *e;
 
+	// block_write(fs_device, sector, buffer);
+	// return;
 	for (e = list_begin (&cache_list); e != list_end (&cache_list);
        e = list_next (e))
 	{
