@@ -26,8 +26,8 @@ filesys_init (bool format)
   inode_init ();
   free_map_init ();
 
-  if (format)
-    do_format ();
+  if (format) do_format ();
+
 
   free_map_open ();
 }
@@ -37,7 +37,7 @@ filesys_init (bool format)
 void
 filesys_done (void)
 {
-  // cache_flush(fs_device);
+  cache_flush(fs_device);
   free_map_close ();
 }
 
