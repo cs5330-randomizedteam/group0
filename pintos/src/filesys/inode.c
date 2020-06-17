@@ -59,8 +59,8 @@ static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
   ASSERT (inode != NULL);
-  if (pos < inode->data.length) {
-    int sector_idx = pos / BLOCK_SECTOR_SIZE;
+  int sector_idx = pos / BLOCK_SECTOR_SIZE, last_idx = inode->data.length == 0 ? -1 : (inode->data.length - 1) / BLOCK_SECTOR_SIZE;
+  if (sector_idx <= last_idx) {
     if (sector_idx < NUM_DIRECT_SECTORS) {
       return inode->data.direct_sectors[sector_idx];
     } else {
@@ -72,6 +72,49 @@ byte_to_sector (const struct inode *inode, off_t pos)
     }
   } else
     return -1;
+}
+
+static block_sector_t
+allocate_sector (struct inode *inode, off_t pos) 
+{
+  static char zeros[BLOCK_SECTOR_SIZE];
+  ASSERT (inode != NULL);
+  ASSERT (pos >= inode->data.length);
+  int last_idx = pos / BLOCK_SECTOR_SIZE, sector_idx = inode->data.length == 0 ? 0 : (inode->data.length - 1) / BLOCK_SECTOR_SIZE + 1;
+  if (!free_map_check_space(2 * (last_idx - sector_idx + 1))) return -1;
+  block_sector_t final_sector = -1;
+  for (;sector_idx <= last_idx; sector_idx++) {
+    if (sector_idx < NUM_DIRECT_SECTORS) {
+      if (free_map_allocate(1, &inode->data.direct_sectors[sector_idx])) {
+        cache_write(fs_device, inode->data.direct_sectors[sector_idx], zeros);
+        final_sector = inode->data.direct_sectors[sector_idx];
+      } else return -1;
+    } else {
+      int indirect_sector_idx = (pos - BLOCK_SECTOR_SIZE * NUM_DIRECT_SECTORS) / (BLOCK_SECTOR_SIZE * BLOCK_SECTOR_SIZE / sizeof(block_sector_t));
+      int last_second_idx = -1;
+      if (inode->data.length > NUM_DIRECT_SECTORS * BLOCK_SECTOR_SIZE) 
+        last_second_idx = (inode->data.length - BLOCK_SECTOR_SIZE * NUM_DIRECT_SECTORS - 1) / (BLOCK_SECTOR_SIZE * BLOCK_SECTOR_SIZE / sizeof(block_sector_t));
+      if (indirect_sector_idx > last_second_idx) {
+         if (free_map_allocate(1, &inode->data.indirect_sectors[indirect_sector_idx])) {
+            cache_write(fs_device, inode->data.indirect_sectors[indirect_sector_idx], zeros);
+         } else return -1;
+      }
+
+      block_sector_t new_sector_id;
+      if (free_map_allocate(1, &new_sector_id)) {
+        cache_write(fs_device, new_sector_id, zeros);
+      } else return -1;
+
+      block_sector_t buf[BLOCK_SECTOR_SIZE / sizeof(block_sector_t)];
+      cache_read(fs_device, inode->data.indirect_sectors[indirect_sector_idx], buf);
+      int second_lvl_idx = ((pos - BLOCK_SECTOR_SIZE * NUM_DIRECT_SECTORS) % (BLOCK_SECTOR_SIZE * BLOCK_SECTOR_SIZE / sizeof(block_sector_t))) / BLOCK_SECTOR_SIZE;
+      buf[second_lvl_idx] = new_sector_id;
+      cache_write(fs_device, inode->data.indirect_sectors[indirect_sector_idx], buf);
+      final_sector = new_sector_id;
+    }
+  }
+  return final_sector;
+
 }
 
 /* Initializes the inode module. */
@@ -320,26 +363,36 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset)
-{
+{ 
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
 
   if (inode->deny_write_cnt)
     return 0;
+
+  off_t increase_len = size - (inode_length(inode) - offset);
+  if (increase_len + inode->data.length > MAX_FILE_SIZE) 
+    return bytes_written;
+
   while (size > 0)
     {
       /* Sector to write, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
+      if (sector_idx == (block_sector_t)-1) {
+        sector_idx = allocate_sector(inode, offset);
+        if (sector_idx == (block_sector_t)-1) {
+          break;
+        }
+      }
+
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
-      /* Bytes left in inode, bytes left in sector, lesser of the two. */
-      off_t inode_left = inode_length (inode) - offset;
+      /* Bytes left in sector. */
       int sector_left = BLOCK_SECTOR_SIZE - sector_ofs;
-      int min_left = inode_left < sector_left ? inode_left : sector_left;
 
-      /* Number of bytes to actually write into this sector. */
-      int chunk_size = size < min_left ? size : min_left;
+      // Number of bytes to actually write into this sector. 
+      int chunk_size = size < sector_left ? size : sector_left;
       if (chunk_size <= 0) 
         break;
 
@@ -373,8 +426,10 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       size -= chunk_size;
       offset += chunk_size;
       bytes_written += chunk_size;
+      inode->data.length = inode->data.length > offset ? inode->data.length : offset;
     }
   free (bounce);
+  cache_write(fs_device, inode->sector, &inode->data);
   return bytes_written;
 }
 
