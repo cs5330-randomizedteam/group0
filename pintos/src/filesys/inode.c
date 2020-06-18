@@ -88,26 +88,22 @@ allocate_sector (struct inode *inode, off_t pos)
       if (free_map_allocate(1, &inode->data.direct_sectors[sector_idx])) {
         cache_write(fs_device, inode->data.direct_sectors[sector_idx], zeros);
         final_sector = inode->data.direct_sectors[sector_idx];
-      } else return -1;
+      } else PANIC("Unexpected direct sectors allocation failure");
     } else {
-      int indirect_sector_idx = (pos - BLOCK_SECTOR_SIZE * NUM_DIRECT_SECTORS) / (BLOCK_SECTOR_SIZE * BLOCK_SECTOR_SIZE / sizeof(block_sector_t));
-      int last_second_idx = -1;
-      if (inode->data.length > NUM_DIRECT_SECTORS * BLOCK_SECTOR_SIZE) 
-        last_second_idx = (inode->data.length - BLOCK_SECTOR_SIZE * NUM_DIRECT_SECTORS - 1) / (BLOCK_SECTOR_SIZE * BLOCK_SECTOR_SIZE / sizeof(block_sector_t));
-      if (indirect_sector_idx > last_second_idx) {
+      int indirect_sector_idx = (sector_idx - NUM_DIRECT_SECTORS) / (BLOCK_SECTOR_SIZE / sizeof(block_sector_t));
+      int second_lvl_idx = (sector_idx - NUM_DIRECT_SECTORS) % (BLOCK_SECTOR_SIZE / sizeof(block_sector_t));
+      if (second_lvl_idx == 0) {
          if (free_map_allocate(1, &inode->data.indirect_sectors[indirect_sector_idx])) {
             cache_write(fs_device, inode->data.indirect_sectors[indirect_sector_idx], zeros);
-         } else return -1;
+         } else PANIC("Unexpected indirect sectors allocation failure");
       }
-
       block_sector_t new_sector_id;
       if (free_map_allocate(1, &new_sector_id)) {
         cache_write(fs_device, new_sector_id, zeros);
-      } else return -1;
+      } else PANIC("Unexpected indirect data sectors allocation failure");
 
       block_sector_t buf[BLOCK_SECTOR_SIZE / sizeof(block_sector_t)];
       cache_read(fs_device, inode->data.indirect_sectors[indirect_sector_idx], buf);
-      int second_lvl_idx = ((pos - BLOCK_SECTOR_SIZE * NUM_DIRECT_SECTORS) % (BLOCK_SECTOR_SIZE * BLOCK_SECTOR_SIZE / sizeof(block_sector_t))) / BLOCK_SECTOR_SIZE;
       buf[second_lvl_idx] = new_sector_id;
       cache_write(fs_device, inode->data.indirect_sectors[indirect_sector_idx], buf);
       final_sector = new_sector_id;
@@ -314,6 +310,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
     {
       /* Disk sector to read, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
+      int sectod_id = offset / BLOCK_SECTOR_SIZE;
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
