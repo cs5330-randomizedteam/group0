@@ -221,6 +221,19 @@ syscall_handler (struct intr_frame *f UNUSED)
           break;
         }
 
+      case SYS_INUMBER:
+        {
+          check_valid_uaddr(f, args + 1, sizeof(uint32_t));
+          int fd = args[1];
+          if (fd < 0 || fd >= MAX_FILE_DESCRIPTORS) {
+            f->eax = -1;
+            break;
+          } 
+          
+          f->eax = thread_current()->fdtable[fd]->inode->sector;
+          break;
+        }
+
       case SYS_FILESIZE:
         {
           check_valid_uaddr(f, args + 1, sizeof(uint32_t));
