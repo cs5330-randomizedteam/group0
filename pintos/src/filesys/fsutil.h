@@ -6,5 +6,6 @@ void fsutil_cat (char **argv);
 void fsutil_rm (char **argv);
 void fsutil_extract (char **argv);
 void fsutil_append (char **argv);
+int fsutil_split_path (char* path);
 
 #endif /* filesys/fsutil.h */

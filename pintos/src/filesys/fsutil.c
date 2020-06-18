@@ -221,3 +221,15 @@ fsutil_append (char **argv)
   file_close (src);
   free (buffer);
 }
+
+int 
+fsutil_split_path (char* path) {
+  int full_len = strlen(path);
+  int split_idx = full_len - 1;
+  for (;split_idx >= 0; split_idx--) {
+    if (path[split_idx] == '/') break;
+  }
+  if (split_idx != -1) path[split_idx] = '\0';
+  return split_idx;
+}
+

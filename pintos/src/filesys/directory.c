@@ -5,6 +5,11 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
+
+static const char* current_directory = ".";
+static const char* parent_directory = "..";
+
 
 /* A directory. */
 struct dir
@@ -24,9 +29,14 @@ struct dir_entry
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
-dir_create (block_sector_t sector, size_t entry_cnt)
+dir_create (block_sector_t sector, size_t entry_cnt, block_sector_t parent_sector)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+  if (!inode_create (sector, (entry_cnt + 2) * sizeof (struct dir_entry), 1)) return false;
+  struct dir* new_dir = dir_open (inode_open (sector));
+  dir_add(new_dir, current_directory, sector);
+  dir_add(new_dir, parent_directory, parent_sector);
+  dir_close(new_dir);
+  return true;
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -201,6 +211,9 @@ dir_remove (struct dir *dir, const char *name)
   if (inode == NULL)
     goto done;
 
+  if (inode_isdir(inode) && inode_length(inode) / sizeof (struct dir_entry) > 2)
+    goto done;
+
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e)
@@ -226,11 +239,51 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e)
     {
       dir->pos += sizeof e;
-      if (e.in_use)
+      if (e.in_use && strcmp(e.name, current_directory) != 0 && strcmp(e.name, parent_directory)) 
         {
           strlcpy (name, e.name, NAME_MAX + 1);
           return true;
         }
     }
   return false;
+}
+
+struct dir* dir_resolve(const char *dir) {
+  size_t len = strlen(dir);
+  if (len == 0) return NULL;
+
+  char *dup_dir = malloc(len + 1);
+  strlcpy(dup_dir, dir, len + 1);
+
+  char *token, *save_ptr;
+  char **args = malloc(len);
+  int num_dir = 0;
+  for (token = strtok_r ((char*)dup_dir, "/", &save_ptr); token != NULL;
+      token = strtok_r (NULL, "/", &save_ptr), ++num_dir) {
+      args[num_dir] = token;
+  }
+
+  block_sector_t cur_working_sector = thread_current()->dir_sector;
+  if (dir[0] == '/') cur_working_sector = ROOT_DIR_SECTOR;
+
+  struct dir* cur_dir = dir_open (inode_open (cur_working_sector));
+  for (int i = 0; i < num_dir; i++) {
+    struct inode* next_inode;
+    if (dir_lookup(cur_dir, args[i], &next_inode)) {
+      dir_close(cur_dir);
+      if (!inode_isdir(next_inode)) {
+        cur_dir = NULL;
+        break;
+      }
+      cur_dir = dir_open (next_inode);
+    } else {
+      dir_close(cur_dir);
+      cur_dir = NULL;
+      break;
+    }
+  }
+
+  free(dup_dir);
+  free(args);
+  return cur_dir;
 }

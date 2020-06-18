@@ -11,6 +11,7 @@
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/fsutil.h"
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
@@ -304,7 +305,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  int split_idx = fsutil_split_path(file_name);
+  char* new_filename = file_name + split_idx + 1;
+  struct dir* working_dir = dir_resolve(file_name);
+
+  file = filesys_open (new_filename, working_dir);
+  dir_close(working_dir);
   if (file == NULL)
     {
       printf ("load: %s: open failed\n", file_name);

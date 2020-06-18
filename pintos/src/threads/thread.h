@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "threads/synch.h"
 #include "threads/fixed-point.h"
+#include "devices/block.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -118,6 +119,8 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 
     struct file* fdtable[MAX_FILE_DESCRIPTORS];    /* File descriptors table. */
+
+    block_sector_t dir_sector;
 #endif
 
     /* Owned by thread.c. */

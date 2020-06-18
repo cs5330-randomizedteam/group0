@@ -23,8 +23,8 @@ struct inode_disk
     unsigned magic;                     /* Magic number. */
     block_sector_t direct_sectors[NUM_DIRECT_SECTORS];   /* Direct sectors */
     block_sector_t indirect_sectors[NUM_INDIRECT_SECTORS]; /* indirect sectors */
-
-    uint32_t unused[86];               /* Not used. */
+    uint32_t is_dir;                   /* Non-zero if it is a directory. */ 
+    uint32_t unused[84];               /* Not used. */
   };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -117,13 +117,14 @@ inode_init (void)
   list_init (&open_inodes);
 }
 
+
 /* Initializes an inode with LENGTH bytes of data and
    writes the new inode to sector SECTOR on the file system
    device.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, uint32_t is_dir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -142,6 +143,7 @@ inode_create (block_sector_t sector, off_t length)
       size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
+      disk_inode->is_dir = is_dir;
 
       size_t sectors_capacity = BLOCK_SECTOR_SIZE / sizeof(block_sector_t);
       static char zeros[BLOCK_SECTOR_SIZE];
@@ -422,6 +424,11 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   cache_write(fs_device, inode->sector, &inode->data);
   return bytes_written;
 }
+
+bool
+inode_isdir(struct inode *inode) {
+  return inode->data.is_dir;
+} 
 
 /* Disables writes to INODE.
    May be called at most once per inode opener. */

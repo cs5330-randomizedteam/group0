@@ -11,6 +11,8 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "filesys/directory.h"
+#include "filesys/filesys.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -485,6 +487,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   t->is_orphan = false;
   t->is_loaded = false;
+  t->dir_sector = ROOT_DIR_SECTOR;
   sema_init (&(t->load_sem), 0);
   sema_init (&(t->child_sem), 0);
   list_init(&(t->child_processes));
