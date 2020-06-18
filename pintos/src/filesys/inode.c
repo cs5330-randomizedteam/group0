@@ -85,22 +85,19 @@ allocate_sector (struct inode *inode, off_t pos)
   block_sector_t final_sector = -1;
   for (;sector_idx <= last_idx; sector_idx++) {
     if (sector_idx < NUM_DIRECT_SECTORS) {
-      if (free_map_allocate(1, &inode->data.direct_sectors[sector_idx])) {
-        cache_write(fs_device, inode->data.direct_sectors[sector_idx], zeros);
-        final_sector = inode->data.direct_sectors[sector_idx];
-      } else PANIC("Unexpected direct sectors allocation failure");
+      free_map_allocate(1, &inode->data.direct_sectors[sector_idx]);
+      cache_write(fs_device, inode->data.direct_sectors[sector_idx], zeros);
+      final_sector = inode->data.direct_sectors[sector_idx];
     } else {
       int indirect_sector_idx = (sector_idx - NUM_DIRECT_SECTORS) / (BLOCK_SECTOR_SIZE / sizeof(block_sector_t));
       int second_lvl_idx = (sector_idx - NUM_DIRECT_SECTORS) % (BLOCK_SECTOR_SIZE / sizeof(block_sector_t));
       if (second_lvl_idx == 0) {
-         if (free_map_allocate(1, &inode->data.indirect_sectors[indirect_sector_idx])) {
-            cache_write(fs_device, inode->data.indirect_sectors[indirect_sector_idx], zeros);
-         } else PANIC("Unexpected indirect sectors allocation failure");
+         free_map_allocate(1, &inode->data.indirect_sectors[indirect_sector_idx]);
+         cache_write(fs_device, inode->data.indirect_sectors[indirect_sector_idx], zeros);
       }
       block_sector_t new_sector_id;
-      if (free_map_allocate(1, &new_sector_id)) {
-        cache_write(fs_device, new_sector_id, zeros);
-      } else PANIC("Unexpected indirect data sectors allocation failure");
+      free_map_allocate(1, &new_sector_id);
+      cache_write(fs_device, new_sector_id, zeros);
 
       block_sector_t buf[BLOCK_SECTOR_SIZE / sizeof(block_sector_t)];
       cache_read(fs_device, inode->data.indirect_sectors[indirect_sector_idx], buf);
@@ -159,9 +156,8 @@ inode_create (block_sector_t sector, off_t length)
       }
 
       for (size_t i = 0; i < num_direct_sectors_needed; i++) {
-        if (free_map_allocate(1, &disk_inode->direct_sectors[i]))
-          cache_write (fs_device, disk_inode->direct_sectors[i], zeros);
-        else PANIC("Unexpected direct sectors allocation failure");
+        free_map_allocate(1, &disk_inode->direct_sectors[i]);
+        cache_write (fs_device, disk_inode->direct_sectors[i], zeros);
       }
 
       if (sectors > NUM_DIRECT_SECTORS) {
@@ -169,17 +165,15 @@ inode_create (block_sector_t sector, off_t length)
         sectors -= NUM_DIRECT_SECTORS;
 
         for (size_t i = 0; i < num_indirect_sectors_needed; i++) {
-          if (free_map_allocate(1, &disk_inode->indirect_sectors[i])) {
-            memset(buf, 0, BLOCK_SECTOR_SIZE);
-            size_t cur_indirect_sectors = sectors > sectors_capacity ? sectors_capacity : sectors;
-            for (size_t j = 0; j < cur_indirect_sectors; j++) {
-              if (free_map_allocate(1, &buf[j])) {
-                cache_write (fs_device, buf[j], zeros);
-              } else PANIC("Unexpected indirect data sectors allocation failure");
-            }
-            sectors -= cur_indirect_sectors;
-            cache_write(fs_device, disk_inode->indirect_sectors[i], buf);
-          } else PANIC("Unexpected indirect sectors allocation failure");
+          free_map_allocate(1, &disk_inode->indirect_sectors[i]);
+          memset(buf, 0, BLOCK_SECTOR_SIZE);
+          size_t cur_indirect_sectors = sectors > sectors_capacity ? sectors_capacity : sectors;
+          for (size_t j = 0; j < cur_indirect_sectors; j++) {
+            free_map_allocate(1, &buf[j]);
+            cache_write (fs_device, buf[j], zeros);
+          }
+          sectors -= cur_indirect_sectors;
+          cache_write(fs_device, disk_inode->indirect_sectors[i], buf);
         }
       }
 
@@ -310,7 +304,6 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
     {
       /* Disk sector to read, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
-      int sectod_id = offset / BLOCK_SECTOR_SIZE;
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
