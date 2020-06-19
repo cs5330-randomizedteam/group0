@@ -1,12 +1,15 @@
 #include "filesys/filesys.h"
 #include <debug.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
+#include "threads/malloc.h"
 #include "filesys/file.h"
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
 #include "filesys/cache.h"
+#include "filesys/fsutil.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -40,23 +43,45 @@ filesys_done (void)
   cache_flush(fs_device);
   free_map_close ();
 }
+
+static void
+filesys_resolve_path(const char* path, char** filename, char** name, struct dir** working_dir) 
+{
+  int len = strlen(path);
+  *name = malloc(len + 1);
+  if (*name == NULL) return;
+  strlcpy(*name, path, len + 1);
+  int split_idx = fsutil_split_path(*name);
+  *filename = *name + split_idx + 1;
+  char * dir_name = *name;
+  if (split_idx == -1) dir_name = "";
+  *working_dir = dir_resolve(dir_name);
+}
+
+
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
 bool
-filesys_create (const char *name, off_t initial_size, struct dir *working_dir)
-{
+filesys_create (const char *path, off_t initial_size)
+{   
+  char* filename = NULL, *name = NULL;
+  struct dir* working_dir = NULL;
+
+  filesys_resolve_path(path, &filename, &name, &working_dir);
+
   block_sector_t inode_sector = 0;
   bool success = (working_dir != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, 0)
-                  && dir_add (working_dir, name, inode_sector));
+                  && dir_add (working_dir, filename, inode_sector));
   if (!success && inode_sector != 0)
     free_map_release (inode_sector, 1);
   dir_close (working_dir);
 
+  free(name);
   return success;
 }
 
@@ -66,13 +91,19 @@ filesys_create (const char *name, off_t initial_size, struct dir *working_dir)
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 struct file *
-filesys_open (const char *name, struct dir *working_dir)
+filesys_open (const char *path)
 {
   struct inode *inode = NULL;
+  char* filename = NULL, *name = NULL;
+  struct dir* working_dir;
+
+  filesys_resolve_path(path, &filename, &name, &working_dir);
 
   if (working_dir != NULL)
-    dir_lookup (working_dir, name, &inode);
+    dir_lookup (working_dir, filename, &inode);
+  dir_close(working_dir);
 
+  free(name);
   return file_open (inode);
 }
 
@@ -81,9 +112,17 @@ filesys_open (const char *name, struct dir *working_dir)
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 bool
-filesys_remove (const char *name, struct dir *working_dir)
+filesys_remove (const char *path)
 {
-  bool success = working_dir != NULL && dir_remove (working_dir, name);
+  char* filename = NULL, *name = NULL;
+  struct dir* working_dir = NULL;
+
+  filesys_resolve_path(path, &filename, &name, &working_dir);
+
+  bool success = working_dir != NULL && dir_remove (working_dir, filename);
+  dir_close(working_dir);
+
+  free(name);
   return success;
 }
 

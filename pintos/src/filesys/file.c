@@ -166,3 +166,7 @@ file_tell (struct file *file)
   ASSERT (file != NULL);
   return file->pos;
 }
+
+void file_mark_executable(struct file *file) {
+  inode_disk_mark_executable(file_get_inode(file));
+}

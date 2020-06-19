@@ -1,5 +1,6 @@
 #include <list.h>
 #include <string.h>
+#include <stdint.h>
 #include "devices/block.h"
 #include "filesys/cache.h"
 #include "threads/malloc.h"
@@ -18,11 +19,11 @@ struct list cache_list;
 void* sector_buffers[MAX_CACHE_SIZE];
 uint64_t buffer_map;
 
-int ctzll (long long x)
+int ctzll (uint64_t x)
 {
     int i;
-    for (i = 0; i < 8 * sizeof (long long); ++i)
-       if (x & ((long long) 1  << i))
+    for (i = 0; i < 8 * sizeof (uint64_t); ++i)
+       if (x & ((uint64_t) 1  << i))
                       break;
     return i;
 }

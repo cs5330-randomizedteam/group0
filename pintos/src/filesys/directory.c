@@ -7,6 +7,7 @@
 #include "threads/malloc.h"
 #include "threads/thread.h"
 
+
 static const char* current_directory = ".";
 static const char* parent_directory = "..";
 
@@ -214,6 +215,9 @@ dir_remove (struct dir *dir, const char *name)
   if (inode_isdir(inode) && inode_length(inode) / sizeof (struct dir_entry) > 2)
     goto done;
 
+  if (inode_get_inumber(inode) == ROOT_DIR_SECTOR) 
+    goto done;
+
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e)
@@ -248,9 +252,9 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   return false;
 }
 
-struct dir* dir_resolve(const char *dir) {
+struct dir* 
+dir_resolve(const char *dir) {
   size_t len = strlen(dir);
-  if (len == 0) return NULL;
 
   char *dup_dir = malloc(len + 1);
   strlcpy(dup_dir, dir, len + 1);

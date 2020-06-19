@@ -17,6 +17,8 @@ off_t file_read_at (struct file *, void *, off_t size, off_t start);
 off_t file_write (struct file *, const void *, off_t);
 off_t file_write_at (struct file *, const void *, off_t size, off_t start);
 
+void file_mark_executable(struct file *);
+
 /* Preventing writes. */
 void file_deny_write (struct file *);
 void file_allow_write (struct file *);

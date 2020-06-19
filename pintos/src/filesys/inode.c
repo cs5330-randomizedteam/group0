@@ -24,6 +24,7 @@ struct inode_disk
     block_sector_t direct_sectors[NUM_DIRECT_SECTORS];   /* Direct sectors */
     block_sector_t indirect_sectors[NUM_INDIRECT_SECTORS]; /* indirect sectors */
     uint32_t is_dir;                   /* Non-zero if it is a directory. */ 
+    uint32_t is_executable_running;    /* If it is loaded as an executable. */
     uint32_t unused[84];               /* Not used. */
   };
 
@@ -144,6 +145,7 @@ inode_create (block_sector_t sector, off_t length, uint32_t is_dir)
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
       disk_inode->is_dir = is_dir;
+      disk_inode->is_executable_running = 0;
 
       size_t sectors_capacity = BLOCK_SECTOR_SIZE / sizeof(block_sector_t);
       static char zeros[BLOCK_SECTOR_SIZE];
@@ -360,7 +362,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
 
-  if (inode->deny_write_cnt)
+  if (inode->deny_write_cnt || inode->data.is_executable_running)
     return 0;
 
   off_t increase_len = size - (inode_length(inode) - offset);
@@ -455,4 +457,32 @@ off_t
 inode_length (const struct inode *inode)
 {
   return inode->data.length;
+}
+
+void 
+inode_disk_mark_executable(struct inode *inode) {
+  inode->data.is_executable_running = 1;
+  cache_write(fs_device, inode->sector, &inode->data);
+}
+
+void 
+inode_disk_unmark_executable(block_sector_t sector) {
+  struct list_elem *e;
+  struct inode *inode;
+
+  /* Check whether this inode is already open. */
+  for (e = list_begin (&open_inodes); e != list_end (&open_inodes);
+       e = list_next (e))
+    {
+      inode = list_entry (e, struct inode, elem);
+      if (inode->sector == sector)
+        {
+          inode->data.is_executable_running = 0;
+        }
+    }
+
+  struct inode_disk * buf;
+  cache_read(fs_device, sector, buf);
+  buf->is_executable_running = 0;
+  cache_write(fs_device, sector, buf);
 }
