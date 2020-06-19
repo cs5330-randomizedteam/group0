@@ -489,6 +489,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->is_loaded = false;
   t->dir_sector = ROOT_DIR_SECTOR;
   t->executable_sector = 0; // no executable sector yet.
+  for (int i = 0; i < MAX_FILE_DESCRIPTORS; i++) 
+    t->fdtable[i].content = NULL;
   sema_init (&(t->load_sem), 0);
   sema_init (&(t->child_sem), 0);
   list_init(&(t->child_processes));
@@ -570,8 +572,11 @@ thread_schedule_tail (struct thread *prev)
       ASSERT (prev != cur);
       int i;
       for (i = 0; i < MAX_FILE_DESCRIPTORS; ++i) {
-        if (prev->fdtable[i] != NULL) {
-          file_close(prev->fdtable[i]);
+        if (prev->fdtable[i].content != NULL) {
+          if (prev->fdtable[i].is_dir) 
+            dir_close((struct dir*) prev->fdtable[i].content); 
+          else 
+            file_close((struct file*) prev->fdtable[i].content);
         }
       } 
       if (prev->is_orphan) palloc_free_page (prev);

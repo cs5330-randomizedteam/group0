@@ -39,9 +39,12 @@ fsutil_cat (char **argv)
   char *buffer;
 
   printf ("Printing '%s' to the console...\n", file_name);
-  file = filesys_open (file_name);
-  if (file == NULL)
+  struct gfile gfile = filesys_open (file_name);
+  if (gfile.content == NULL)
     PANIC ("%s: open failed", file_name);
+  if (gfile.is_dir) 
+    PANIC ("%s: Is a directory", file_name);
+  file = (struct file*) gfile.content;
   buffer = palloc_get_page (PAL_ASSERT);
   for (;;)
     {
@@ -120,7 +123,10 @@ fsutil_extract (char **argv UNUSED)
           /* Create destination file. */
           if (!filesys_create (file_name, size))
             PANIC ("%s: create failed", file_name);
-          dst = filesys_open (file_name);
+          struct gfile gfile = filesys_open (file_name);
+          if (gfile.is_dir)
+            PANIC ("%s: Is a directory", file_name);
+          dst = (struct file*) gfile.content;
           if (dst == NULL)
             PANIC ("%s: open failed", file_name);
 
@@ -182,7 +188,10 @@ fsutil_append (char **argv)
     PANIC ("couldn't allocate buffer");
 
   /* Open source file. */
-  src = filesys_open (file_name);
+  struct gfile gfile = filesys_open (file_name);
+  if (gfile.is_dir)
+    PANIC ("%s: Is a directory", file_name);
+  src = (struct file*) gfile.content;
   if (src == NULL)
     PANIC ("%s: open failed", file_name);
   size = file_length (src);

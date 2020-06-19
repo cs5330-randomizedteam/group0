@@ -461,7 +461,7 @@ inode_length (const struct inode *inode)
 
 void 
 inode_disk_mark_executable(struct inode *inode) {
-  inode->data.is_executable_running = 1;
+  inode->data.is_executable_running++;
   cache_write(fs_device, inode->sector, &inode->data);
 }
 
@@ -477,12 +477,14 @@ inode_disk_unmark_executable(block_sector_t sector) {
       inode = list_entry (e, struct inode, elem);
       if (inode->sector == sector)
         {
-          inode->data.is_executable_running = 0;
+          ASSERT(inode->data.is_executable_running > 0);
+          inode->data.is_executable_running--;
         }
     }
 
   struct inode_disk buf;
   cache_read(fs_device, sector, &buf);
-  buf.is_executable_running = 0;
+  ASSERT(buf.is_executable_running > 0);
+  buf.is_executable_running--;
   cache_write(fs_device, sector, &buf);
 }

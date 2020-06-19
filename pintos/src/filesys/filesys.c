@@ -90,21 +90,35 @@ filesys_create (const char *path, off_t initial_size)
    otherwise.
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
-struct file *
+struct gfile
 filesys_open (const char *path)
-{
+{ 
+  struct gfile res;
+  if (strcmp(path, "/") == 0) {
+    res.content = dir_open_root();
+    res.is_dir = 1;
+    return res;
+  }
+
   struct inode *inode = NULL;
   char* filename = NULL, *name = NULL;
   struct dir* working_dir;
 
   filesys_resolve_path(path, &filename, &name, &working_dir);
-
   if (working_dir != NULL)
     dir_lookup (working_dir, filename, &inode);
   dir_close(working_dir);
 
   free(name);
-  return file_open (inode);
+
+  if (inode_isdir(inode)) {
+    res.content = dir_open(inode);
+    res.is_dir = 1;
+  } else {
+    res.content = inode;
+    res.is_dir = 0;
+  }
+  return res;
 }
 
 /* Deletes the file named NAME.

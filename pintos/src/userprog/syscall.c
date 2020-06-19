@@ -115,14 +115,14 @@ syscall_handler (struct intr_frame *f UNUSED)
             break;
           }
 
-          struct file* cur_file = thread_current()->fdtable[fd];
-          if (cur_file == NULL) {
-            f->eax = 0;
+          if (thread_current()->fdtable[fd].is_dir) {
+            f->eax = -1;
             break;
           }
 
-          if (inode_isdir(file_get_inode(cur_file))) {
-            f->eax = -1;
+          struct file* cur_file = (struct file*) thread_current()->fdtable[fd].content;
+          if (cur_file == NULL) {
+            f->eax = 0;
             break;
           }
 
@@ -199,18 +199,18 @@ syscall_handler (struct intr_frame *f UNUSED)
           char* filename = (char*)args[1];
           validate_char_str(filename, f);
 
-          struct file* opened_file = filesys_open(filename);
-          if (opened_file == NULL) {
+          struct gfile opened_file = filesys_open(filename);
+          if (opened_file.content == NULL) {
             f->eax = -1;
             break;
           }
 
-          struct file** cur_fdtable = thread_current()->fdtable; 
+          struct gfile* cur_fdtable = thread_current()->fdtable; 
           int i;
 
           // fd 0 & 1 reserved for STDIN & STDOUT.
           for (i = 2; i < MAX_FILE_DESCRIPTORS; ++i) {
-            if (cur_fdtable[i] == NULL) {
+            if (cur_fdtable[i].content == NULL) {
               cur_fdtable[i] = opened_file;
               f->eax = i;
               break;
@@ -228,9 +228,14 @@ syscall_handler (struct intr_frame *f UNUSED)
           int fd = args[1];
           if (fd < 0 || fd >= MAX_FILE_DESCRIPTORS) break;
 
-          struct file** cur_fdtable = thread_current()->fdtable;
-          file_close(cur_fdtable[fd]);
-          cur_fdtable[fd] = NULL;
+          struct gfile* cur_fdtable = thread_current()->fdtable;
+          if (cur_fdtable[fd].is_dir) {
+            dir_close((struct dir*) cur_fdtable[fd].content);
+          } else {
+            file_close((struct file*) cur_fdtable[fd].content);
+          }
+
+          cur_fdtable[fd].content = NULL;
           break;
         }
 
@@ -242,13 +247,20 @@ syscall_handler (struct intr_frame *f UNUSED)
             f->eax = -1;
             break;
           } 
-          struct file* cur_file = thread_current()->fdtable[fd];
-          if (cur_file == NULL) {
+          struct gfile cur_file = thread_current()->fdtable[fd];
+          if (cur_file.content == NULL) {
             f->eax = -1;
             break;
           }
 
-          f->eax = inode_get_inumber(file_get_inode(cur_file));
+          struct inode* inode;
+          if (cur_file.is_dir) {
+            inode = dir_get_inode((struct dir*) cur_file.content);
+          } else {
+            inode = file_get_inode((struct file*) cur_file.content);
+          }
+
+          f->eax = inode_get_inumber(inode);
           break;
         }
 
@@ -261,13 +273,20 @@ syscall_handler (struct intr_frame *f UNUSED)
             break;
           }
 
-          struct file* cur_file = thread_current()->fdtable[fd];
-          if (cur_file == NULL) {
+          struct gfile cur_file = thread_current()->fdtable[fd];
+          if (cur_file.content == NULL) {
             f->eax = 0;
             break;
           }
 
-          f->eax = file_length(cur_file);
+          struct inode* inode;
+          if (cur_file.is_dir) {
+            inode = dir_get_inode((struct dir*) cur_file.content);
+          } else {
+            inode = file_get_inode((struct file*) cur_file.content);
+          }
+
+          f->eax = inode_length(inode);
           break;
         }
 
@@ -280,12 +299,13 @@ syscall_handler (struct intr_frame *f UNUSED)
             break;
           }
 
-          struct file* cur_file = thread_current()->fdtable[fd];
-          if (cur_file == NULL) {
+          struct gfile file = thread_current()->fdtable[fd];
+          if (file.content == NULL || file.is_dir) {
             f->eax = 0;
             break;
           }
 
+          struct file* cur_file = (struct file*) file.content;
           f->eax = file_tell(cur_file);
           break;
         }
@@ -298,10 +318,13 @@ syscall_handler (struct intr_frame *f UNUSED)
           }
           uint32_t pos = args[2];
 
-          struct file* cur_file = thread_current()->fdtable[fd];
-          if (cur_file == NULL) {
+          struct gfile file = thread_current()->fdtable[fd];
+          if (file.content == NULL || file.is_dir) {
+            f->eax = 0;
             break;
           }
+
+          struct file* cur_file = (struct file*) file.content;
 
           file_seek(cur_file, pos);
           break;          
@@ -330,11 +353,13 @@ syscall_handler (struct intr_frame *f UNUSED)
             break;
           }
 
-          struct file* cur_file = thread_current()->fdtable[fd];
-          if (cur_file == NULL || inode_isdir(file_get_inode(cur_file))) {
-            f->eax = -1;
+          struct gfile file = thread_current()->fdtable[fd];
+          if (file.content == NULL || file.is_dir) {
+            f->eax = 0;
             break;
           }
+
+          struct file* cur_file = (struct file*) file.content;
 
           uint32_t remain_size = file_length(cur_file) - file_tell(cur_file);
           uint32_t min_buf_size = remain_size < size ? remain_size : size;
@@ -408,16 +433,15 @@ syscall_handler (struct intr_frame *f UNUSED)
             f->eax = 0;
             break;
           }
-
-          struct file* cur_file = thread_current()->fdtable[fd];
-          if (cur_file == NULL || !inode_isdir(file_get_inode(cur_file))) {
+          
+          struct gfile file = thread_current()->fdtable[fd];
+          if (file.content == NULL || !file.is_dir) {
             f->eax = 0;
             break;
           }
 
-          struct dir* cur_dir = dir_open(file_get_inode(cur_file));
+          struct dir* cur_dir = (struct dir*) file.content;
           f->eax = dir_readdir (cur_dir, name);
-          dir_close(cur_dir);
           break;
         }
 
@@ -429,13 +453,13 @@ syscall_handler (struct intr_frame *f UNUSED)
             f->eax = 0;
             break;
           } 
-          struct file* cur_file = thread_current()->fdtable[fd];
-          if (cur_file == NULL) {
+          struct gfile cur_file = thread_current()->fdtable[fd];
+          if (cur_file.content == NULL) {
             f->eax = 0;
             break;
           }
 
-          f->eax = inode_isdir(file_get_inode(cur_file));
+          f->eax = cur_file.is_dir;
           break;
         }
 

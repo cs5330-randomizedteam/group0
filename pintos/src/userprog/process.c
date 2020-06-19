@@ -308,12 +308,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
-  if (file == NULL)
+  struct gfile gfile = filesys_open (file_name);
+  if (gfile.content == NULL || gfile.is_dir)
     {
       printf ("load: %s: open failed\n", file_name);
       goto done;
     }
+  file = (struct file*) gfile.content;
   file_mark_executable(file);
   t->executable_sector = inode_get_inumber(file_get_inode(file));
 

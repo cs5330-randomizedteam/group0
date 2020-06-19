@@ -7,6 +7,7 @@
 #include "threads/synch.h"
 #include "threads/fixed-point.h"
 #include "devices/block.h"
+#include "filesys/filesys.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -118,7 +119,7 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 
-    struct file* fdtable[MAX_FILE_DESCRIPTORS];    /* File descriptors table. */
+    struct gfile fdtable[MAX_FILE_DESCRIPTORS];    /* File descriptors table. */
 
     block_sector_t dir_sector;
 

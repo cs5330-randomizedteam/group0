@@ -212,7 +212,15 @@ dir_remove (struct dir *dir, const char *name)
   if (inode == NULL)
     goto done;
 
-  if (inode_isdir(inode) && inode_length(inode) / sizeof (struct dir_entry) > 2)
+  struct dir_entry ety;
+  size_t offset;
+  int in_use_entry = 0;
+
+  for (offset = 0; inode_read_at (inode, &ety, sizeof ety, offset) == sizeof ety;
+       offset += sizeof ety)
+    if (ety.in_use) in_use_entry++;
+
+  if (inode_isdir(inode) && in_use_entry > 2)
     goto done;
 
   if (inode_get_inumber(inode) == ROOT_DIR_SECTOR) 
