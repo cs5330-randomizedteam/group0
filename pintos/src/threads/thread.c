@@ -488,6 +488,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->is_orphan = false;
   t->is_loaded = false;
   t->dir_sector = ROOT_DIR_SECTOR;
+  t->executable_sector = 0; // no executable sector yet.
   sema_init (&(t->load_sem), 0);
   sema_init (&(t->child_sem), 0);
   list_init(&(t->child_processes));
@@ -627,21 +628,6 @@ get_thread(tid_t tid)
     }
   return NULL;
 }
-
-struct thread* 
-get_thread_with_name(char* name) 
-{
-  struct list_elem *e;
-
-  for (e = list_begin (&all_list); e != list_end (&all_list);
-       e = list_next (e))
-    {
-      struct thread *t = list_entry (e, struct thread, allelem);
-      if (strcmp(name, t->name) == 0) return t;
-    }
-  return NULL;
-}
-
 
 
 

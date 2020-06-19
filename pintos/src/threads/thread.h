@@ -121,6 +121,8 @@ struct thread
     struct file* fdtable[MAX_FILE_DESCRIPTORS];    /* File descriptors table. */
 
     block_sector_t dir_sector;
+
+    block_sector_t executable_sector;
 #endif
 
     /* Owned by thread.c. */
@@ -164,6 +166,5 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 struct thread* get_thread(tid_t tid);
-struct thread* get_thread_with_name(char* name);
 
 #endif /* threads/thread.h */

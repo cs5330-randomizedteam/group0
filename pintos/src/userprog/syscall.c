@@ -121,6 +121,11 @@ syscall_handler (struct intr_frame *f UNUSED)
             break;
           }
 
+          if (inode_isdir(file_get_inode(cur_file))) {
+            f->eax = -1;
+            break;
+          }
+
           uint32_t remain_size = file_length(cur_file) - file_tell(cur_file);
           uint32_t max_write_size = remain_size < size ? remain_size : size;
           check_valid_uaddr(f, buf, max_write_size);
@@ -171,20 +176,8 @@ syscall_handler (struct intr_frame *f UNUSED)
           char* filename = (char*)args[1];
           validate_char_str(filename, f);
 
-
-          int split_idx = fsutil_split_path(filename);
-          char* new_filename = filename + split_idx + 1;
-          
-          if (strlen(new_filename) == 0) {
-            f->eax = -1;
-            break;
-          }
-
-          struct dir* working_dir = dir_resolve(filename);
-
           uint32_t init_size = args[2];
-          bool success = filesys_create(filename, init_size, working_dir);
-          dir_close(working_dir);
+          bool success = filesys_create(filename, init_size);
           f->eax = success;
           break;
         }
@@ -195,18 +188,7 @@ syscall_handler (struct intr_frame *f UNUSED)
           char* filename = (char*)args[1];
           validate_char_str(filename, f);
 
-          int split_idx = fsutil_split_path(filename);
-          char* new_filename = filename + split_idx + 1;
-          
-          if (strlen(new_filename) == 0) {
-            f->eax = -1;
-            break;
-          }
-
-          struct dir* working_dir = dir_resolve(filename);
-
-          bool success = filesys_remove(new_filename, working_dir);
-          dir_close(working_dir);
+          bool success = filesys_remove(filename);
           f->eax = success;
           break;
         }      
@@ -217,25 +199,11 @@ syscall_handler (struct intr_frame *f UNUSED)
           char* filename = (char*)args[1];
           validate_char_str(filename, f);
 
-          int split_idx = fsutil_split_path(filename);
-          char* new_filename = filename + split_idx + 1;
-          
-          if (strlen(new_filename) == 0) {
-            f->eax = -1;
-            break;
-          }
-
-          struct dir* working_dir = dir_resolve(filename);
-
-          struct file* opened_file = filesys_open(new_filename, working_dir);
-          dir_close(working_dir);
+          struct file* opened_file = filesys_open(filename);
           if (opened_file == NULL) {
             f->eax = -1;
             break;
           }
-
-          // executable running
-          if (get_thread_with_name(filename) != NULL) file_deny_write(opened_file);
 
           struct file** cur_fdtable = thread_current()->fdtable; 
           int i;
@@ -363,7 +331,7 @@ syscall_handler (struct intr_frame *f UNUSED)
           }
 
           struct file* cur_file = thread_current()->fdtable[fd];
-          if (cur_file == NULL) {
+          if (cur_file == NULL || inode_isdir(file_get_inode(cur_file))) {
             f->eax = -1;
             break;
           }
@@ -402,12 +370,12 @@ syscall_handler (struct intr_frame *f UNUSED)
 
           int split_idx = fsutil_split_path(dir_name);
           char* new_dir_name = dir_name + split_idx + 1;
-          
+          if (split_idx == -1) dir_name = ""; 
           if (strlen(new_dir_name) == 0) {
             f->eax = 0;
             break;
           }
-        
+          
           struct dir* parent_dir = dir_resolve (dir_name);
 
           if (parent_dir == NULL) {
@@ -442,7 +410,7 @@ syscall_handler (struct intr_frame *f UNUSED)
           }
 
           struct file* cur_file = thread_current()->fdtable[fd];
-          if (cur_file == NULL || !inode_is_dir(file_get_inode(cur_file))) {
+          if (cur_file == NULL || !inode_isdir(file_get_inode(cur_file))) {
             f->eax = 0;
             break;
           }
@@ -467,7 +435,7 @@ syscall_handler (struct intr_frame *f UNUSED)
             break;
           }
 
-          f->eax = inode_is_dir(file_get_inode(cur_file));
+          f->eax = inode_isdir(file_get_inode(cur_file));
           break;
         }
 

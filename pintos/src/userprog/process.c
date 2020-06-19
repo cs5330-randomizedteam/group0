@@ -11,7 +11,7 @@
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
-#include "filesys/fsutil.h"
+#include "filesys/inode.h"
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
@@ -180,6 +180,9 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  if (cur->executable_sector != 0)
+    inode_disk_unmark_executable(cur->executable_sector);
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -305,17 +308,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  int split_idx = fsutil_split_path(file_name);
-  char* new_filename = file_name + split_idx + 1;
-  struct dir* working_dir = dir_resolve(file_name);
-
-  file = filesys_open (new_filename, working_dir);
-  dir_close(working_dir);
+  file = filesys_open (file_name);
   if (file == NULL)
     {
       printf ("load: %s: open failed\n", file_name);
       goto done;
     }
+  file_mark_executable(file);
+  t->executable_sector = inode_get_inumber(file_get_inode(file));
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
