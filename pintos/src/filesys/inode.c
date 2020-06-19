@@ -481,8 +481,8 @@ inode_disk_unmark_executable(block_sector_t sector) {
         }
     }
 
-  struct inode_disk * buf;
-  cache_read(fs_device, sector, buf);
-  buf->is_executable_running = 0;
-  cache_write(fs_device, sector, buf);
+  struct inode_disk buf;
+  cache_read(fs_device, sector, &buf);
+  buf.is_executable_running = 0;
+  cache_write(fs_device, sector, &buf);
 }
