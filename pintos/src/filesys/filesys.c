@@ -111,11 +111,16 @@ filesys_open (const char *path)
 
   free(name);
 
+  if (inode == NULL) {
+    res.content = NULL;
+    return res;
+  }
+
   if (inode_isdir(inode)) {
     res.content = dir_open(inode);
     res.is_dir = 1;
   } else {
-    res.content = inode;
+    res.content = file_open(inode);
     res.is_dir = 0;
   }
   return res;
