@@ -141,7 +141,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       case SYS_EXEC:
         {
           check_valid_uaddr(f, args + 1, sizeof(uint32_t));
-          char* start_addr = (char*)args[1];
+          const char* start_addr = (char*)args[1];
           validate_char_str(start_addr, f);
 
           tid_t tid = process_execute(start_addr);
@@ -173,7 +173,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       case SYS_CREATE:
         {
           check_valid_uaddr(f, args + 1, 2 * sizeof(uint32_t));
-          char* filename = (char*)args[1];
+          const char* filename = (char*)args[1];
           validate_char_str(filename, f);
 
           uint32_t init_size = args[2];
@@ -185,7 +185,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       case SYS_REMOVE:
         {
           check_valid_uaddr(f, args + 1, sizeof(uint32_t));
-          char* filename = (char*)args[1];
+          const char* filename = (char*)args[1];
           validate_char_str(filename, f);
 
           bool success = filesys_remove(filename);
@@ -196,7 +196,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       case SYS_OPEN:
         {
           check_valid_uaddr(f, args + 1, sizeof(uint32_t));
-          char* filename = (char*)args[1];
+          const char* filename = (char*)args[1];
           validate_char_str(filename, f);
 
           struct gfile opened_file = filesys_open(filename);
@@ -390,21 +390,35 @@ syscall_handler (struct intr_frame *f UNUSED)
       case SYS_MKDIR:
         {
           check_valid_uaddr(f, args + 1, sizeof(uint32_t));
-          char* dir_name = (char*)args[1];
-          validate_char_str(dir_name, f);
+          validate_char_str((char*)args[1], f);
+
+          int len = strlen((char*)args[1]) + 1;
+
+          char* dir_name = malloc(len);
+          strlcpy(dir_name, (char*)args[1], len);
+          char* full_path = dir_name;
 
           int split_idx = fsutil_split_path(dir_name);
           char* new_dir_name = dir_name + split_idx + 1;
-          if (split_idx == -1) dir_name = ""; 
+          if (split_idx == -1) dir_name = "";
           if (strlen(new_dir_name) == 0) {
             f->eax = 0;
+            free(full_path);
             break;
           }
-          
+            
           struct dir* parent_dir = dir_resolve (dir_name);
-
           if (parent_dir == NULL) {
             f->eax = 0;
+            free(full_path);
+            break;
+          }
+
+          struct inode* inode = NULL;
+          dir_lookup(parent_dir, new_dir_name, &inode);
+          if (inode != NULL) {
+            f->eax = 0;
+            free(full_path);
             break;
           }
 
@@ -419,6 +433,7 @@ syscall_handler (struct intr_frame *f UNUSED)
           }
 
           dir_close(parent_dir);
+          free(full_path);
           break;
         }
 

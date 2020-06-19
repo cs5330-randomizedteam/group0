@@ -238,7 +238,9 @@ fsutil_split_path (char* path) {
   for (;split_idx >= 0; split_idx--) {
     if (path[split_idx] == '/') break;
   }
-  if (split_idx != -1) path[split_idx] = '\0';
+
+  if (split_idx != -1)
+    path[split_idx] = '\0';
   return split_idx;
 }
 

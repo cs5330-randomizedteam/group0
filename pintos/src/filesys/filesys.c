@@ -55,7 +55,8 @@ filesys_resolve_path(const char* path, char** filename, char** name, struct dir*
   *filename = *name + split_idx + 1;
   char * dir_name = *name;
   if (split_idx == -1) dir_name = "";
-  *working_dir = dir_resolve(dir_name);
+  if (split_idx == 0) *working_dir = dir_open_root();
+  else *working_dir = dir_resolve(dir_name);
 }
 
 
@@ -74,6 +75,7 @@ filesys_create (const char *path, off_t initial_size)
 
   block_sector_t inode_sector = 0;
   bool success = (working_dir != NULL
+                  && !inode_isremoved(dir_get_inode(working_dir))
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, 0)
                   && dir_add (working_dir, filename, inode_sector));
@@ -107,14 +109,14 @@ filesys_open (const char *path)
   filesys_resolve_path(path, &filename, &name, &working_dir);
   if (working_dir != NULL)
     dir_lookup (working_dir, filename, &inode);
-  dir_close(working_dir);
 
-  free(name);
-
-  if (inode == NULL) {
+  if (inode == NULL || inode_isremoved(dir_get_inode(working_dir))) {
     res.content = NULL;
     return res;
   }
+
+  dir_close(working_dir);
+  free(name);
 
   if (inode_isdir(inode)) {
     res.content = dir_open(inode);

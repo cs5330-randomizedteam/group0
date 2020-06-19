@@ -20,6 +20,7 @@ void inode_deny_write (struct inode *);
 void inode_allow_write (struct inode *);
 off_t inode_length (const struct inode *);
 bool inode_isdir (struct inode *);
+bool inode_isremoved (struct inode *);
 
 void inode_disk_mark_executable(struct inode *);
 void inode_disk_unmark_executable(block_sector_t sector);

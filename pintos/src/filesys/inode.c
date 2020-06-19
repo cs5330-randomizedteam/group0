@@ -488,3 +488,7 @@ inode_disk_unmark_executable(block_sector_t sector) {
   buf.is_executable_running--;
   cache_write(fs_device, sector, &buf);
 }
+
+bool inode_isremoved (struct inode * inode) {
+  return inode->removed;
+}
