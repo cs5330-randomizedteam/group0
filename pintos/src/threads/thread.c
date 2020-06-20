@@ -12,6 +12,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "filesys/directory.h"
+#include "filesys/file.h"
 #include "filesys/filesys.h"
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -185,6 +186,7 @@ thread_create (const char *name, int priority,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
+
   tid = t->tid = allocate_tid ();
 
   /* Stack frame for kernel_thread(). */
@@ -487,8 +489,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
   t->is_orphan = false;
   t->is_loaded = false;
-  t->dir_sector = ROOT_DIR_SECTOR;
   t->executable_sector = 0; // no executable sector yet.
+  t->cur_dir = NULL;
   for (int i = 0; i < MAX_FILE_DESCRIPTORS; i++) 
     t->fdtable[i].content = NULL;
   sema_init (&(t->load_sem), 0);

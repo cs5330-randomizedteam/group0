@@ -380,10 +380,10 @@ syscall_handler (struct intr_frame *f UNUSED)
           struct dir* cur_dir = dir_resolve (dir_name);
           if (cur_dir == NULL) f->eax = 0;
           else {
-            thread_current()->dir_sector = inode_get_inumber(dir_get_inode(cur_dir));
+            dir_close(thread_current()->cur_dir);
+            thread_current()->cur_dir = cur_dir;
             f->eax = 1;
           }
-          dir_close(cur_dir);
           break;
         }
 

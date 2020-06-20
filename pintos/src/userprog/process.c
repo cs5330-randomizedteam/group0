@@ -183,6 +183,9 @@ process_exit (void)
   if (cur->executable_sector != 0)
     inode_disk_unmark_executable(cur->executable_sector);
 
+  if (cur->cur_dir != NULL)
+    dir_close(cur->cur_dir);
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

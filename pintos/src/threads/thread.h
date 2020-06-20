@@ -121,7 +121,7 @@ struct thread
 
     struct gfile fdtable[MAX_FILE_DESCRIPTORS];    /* File descriptors table. */
 
-    block_sector_t dir_sector;
+    struct dir* cur_dir;
 
     block_sector_t executable_sector;
 #endif

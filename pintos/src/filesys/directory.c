@@ -262,8 +262,15 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 
 struct dir* 
 dir_resolve(const char *dir) {
-  size_t len = strlen(dir);
+  struct thread* t = thread_current();
+  if (t->cur_dir == NULL)
+    t->cur_dir = dir_open_root();
+  else if (dir[0] != '/' && inode_isremoved(dir_get_inode(t->cur_dir))) {
+    // relative path and current directory already removed.
+    return NULL;
+  }
 
+  size_t len = strlen(dir);
   char *dup_dir = malloc(len + 1);
   strlcpy(dup_dir, dir, len + 1);
 
@@ -275,10 +282,12 @@ dir_resolve(const char *dir) {
       args[num_dir] = token;
   }
 
-  block_sector_t cur_working_sector = thread_current()->dir_sector;
-  if (dir[0] == '/') cur_working_sector = ROOT_DIR_SECTOR;
+  struct dir* cur_dir;
+  if (dir[0] == '/')
+    cur_dir = dir_open_root();
+  else 
+    cur_dir = dir_open(inode_reopen(dir_get_inode(t->cur_dir)));
 
-  struct dir* cur_dir = dir_open (inode_open (cur_working_sector));
   for (int i = 0; i < num_dir; i++) {
     struct inode* next_inode;
     if (dir_lookup(cur_dir, args[i], &next_inode)) {
