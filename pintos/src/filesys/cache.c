@@ -4,6 +4,7 @@
 #include "devices/block.h"
 #include "filesys/cache.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 
 #define MAX_CACHE_SIZE 64
 
@@ -18,6 +19,8 @@ struct cache_line
 struct list cache_list;
 void* sector_buffers[MAX_CACHE_SIZE];
 uint64_t buffer_map;
+static struct lock block_lock;
+
 
 int ctzll (uint64_t x)
 {
@@ -34,6 +37,7 @@ static void cache_move_front(struct list_elem *e) {
 }
 
 void cache_init(void) {
+	lock_init (&block_lock);
 	list_init (&cache_list);
 	buffer_map = ~0;
 	for (int i = 0; i < MAX_CACHE_SIZE; i++)
@@ -42,8 +46,9 @@ void cache_init(void) {
 
 
 void cache_read(struct block *fs_device, block_sector_t sector, void* buffer) {
-	struct list_elem *e;
+	lock_acquire(&block_lock);
 
+	struct list_elem *e;
 	for (e = list_begin (&cache_list); e != list_end (&cache_list);
        e = list_next (e))
 	{
@@ -51,6 +56,7 @@ void cache_read(struct block *fs_device, block_sector_t sector, void* buffer) {
 	    if (cl->idx == sector) {
 	    	memcpy(buffer, sector_buffers[cl->buffer_idx], BLOCK_SECTOR_SIZE);
 	    	cache_move_front(e);
+	    	lock_release(&block_lock);
 	    	return;
 	    }
 	}
@@ -74,10 +80,12 @@ void cache_read(struct block *fs_device, block_sector_t sector, void* buffer) {
 		cache_move_front(&cl->elem);
 		memcpy(buffer, sector_buffers[cl->buffer_idx], BLOCK_SECTOR_SIZE);
 	}
+	lock_release(&block_lock);
 }
 
 
 void cache_write(struct block *fs_device, block_sector_t sector, void* buffer) {
+	lock_acquire(&block_lock);
 	struct list_elem *e;
 
 	for (e = list_begin (&cache_list); e != list_end (&cache_list);
@@ -88,6 +96,7 @@ void cache_write(struct block *fs_device, block_sector_t sector, void* buffer) {
 	    	memcpy(sector_buffers[cl->buffer_idx], buffer, BLOCK_SECTOR_SIZE);
 	    	cl->is_dirty = 1;
 	    	cache_move_front(e);
+	    	lock_release(&block_lock);
 	    	return;
 	    }
 	}
@@ -109,9 +118,11 @@ void cache_write(struct block *fs_device, block_sector_t sector, void* buffer) {
 		cache_move_front(&cl->elem);
 		memcpy(sector_buffers[cl->buffer_idx], buffer, BLOCK_SECTOR_SIZE);
 	}
+	lock_release(&block_lock);
 }
 
 void cache_flush(struct block *fs_device) {
+	lock_acquire (&block_lock);
 	struct list_elem *e;
 
 	for (e = list_begin (&cache_list); e != list_end (&cache_list);
@@ -121,4 +132,5 @@ void cache_flush(struct block *fs_device) {
 		if (cl->is_dirty) block_write(fs_device, cl->idx, sector_buffers[cl->buffer_idx]);
 		cl->is_dirty = 0;
 	}
+	lock_release (&block_lock);
 }
